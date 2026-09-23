@@ -138,11 +138,11 @@ four targeting modes:
 
 1. **Immediate:** resolves without a click, usually on the caster or in a
    radius around them.
-2. **Directional:** waits for a direction, then performs a melee or ranged
+2. **Directional:** waits for a (click in) direction, then performs a melee or ranged
    action along it.
-3. **Ground:** waits for a visible map coordinate within range, then places an
+3. **Ground:** waits for a (click in) visible map coordinate within range, then places an
    area effect there.
-4. **Unit:** waits for a valid self, ally, enemy, or other target within range.
+4. **Unit:** waits for a (click in) valid self, ally, enemy, or other target within range.
 
 Skill-slot keys remain undecided. Function keys and keys surrounding `WASD`
 are both candidates and must be remappable.
