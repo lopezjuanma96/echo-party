@@ -1,54 +1,190 @@
-[gd_scene format=3]
+[gd_scene load_steps=11 format=3]
 
-[node name="Main" type="Control"]
-layout_mode = 3
-anchors_preset = 15
+[ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://src/main/arena.gd" id="2_arena"]
+[ext_resource type="Script" path="res://src/player/player.gd" id="3_player"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_top"]
+size = Vector2(1824, 24)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_side"]
+size = Vector2(24, 1124)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_player"]
+size = Vector2(36, 48)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.035, 0.047, 0.071, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.24, 0.29, 0.38, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_health_background"]
+bg_color = Color(0.12, 0.14, 0.18, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_health_fill"]
+bg_color = Color(0.78, 0.12, 0.16, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Arena" type="Node2D" parent="."]
+script = ExtResource("2_arena")
+
+[node name="Walls" type="StaticBody2D" parent="Arena"]
+
+[node name="Top" type="CollisionShape2D" parent="Arena/Walls"]
+position = Vector2(0, -562)
+shape = SubResource("RectangleShape2D_top")
+
+[node name="Bottom" type="CollisionShape2D" parent="Arena/Walls"]
+position = Vector2(0, 562)
+shape = SubResource("RectangleShape2D_top")
+
+[node name="Left" type="CollisionShape2D" parent="Arena/Walls"]
+position = Vector2(-912, 0)
+shape = SubResource("RectangleShape2D_side")
+
+[node name="Right" type="CollisionShape2D" parent="Arena/Walls"]
+position = Vector2(912, 0)
+shape = SubResource("RectangleShape2D_side")
+
+[node name="Player" type="CharacterBody2D" parent="."]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("3_player")
+
+[node name="Body" type="Polygon2D" parent="Player"]
+polygon = PackedVector2Array(-18, -24, 18, -24, 18, 24, -18, 24)
+color = Color(0.1, 0.38, 0.95, 1)
+
+[node name="FacingMarker" type="Polygon2D" parent="Player"]
+position = Vector2(0, -17)
+polygon = PackedVector2Array(-5, -4, 5, -4, 0, -10)
+color = Color(0.72, 0.85, 1, 1)
+
+[node name="AimMarker" type="Polygon2D" parent="Player"]
+position = Vector2(0, -34)
+polygon = PackedVector2Array(-6, -3, 6, -3, 0, -12)
+color = Color(0.47, 0.9, 0.64, 0.8)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+shape = SubResource("RectangleShape2D_player")
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+limit_left = -900
+limit_top = -550
+limit_right = 900
+limit_bottom = 550
+position_smoothing_enabled = true
+position_smoothing_speed = 10.0
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Instructions" type="PanelContainer" parent="HUD"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 354.0
+offset_bottom = 86.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="HUD/Instructions"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="Text" type="Label" parent="HUD/Instructions/Margin"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 16
+text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\n1 / 2 or Mouse Wheel  |  Switch weapon"
+
+[node name="Health" type="PanelContainer" parent="HUD"]
+anchors_preset = 1
+anchor_left = 1.0
 anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+offset_left = -300.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 104.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="Background" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.035, 0.047, 0.071, 1)
-
-[node name="Content" type="VBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -260.0
-offset_top = -70.0
-offset_right = 260.0
-offset_bottom = 70.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 16
-
-[node name="Title" type="Label" parent="Content"]
+[node name="Content" type="VBoxContainer" parent="HUD/Health"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.89, 0.76, 0.38, 1)
-theme_override_font_sizes/font_size = 46
-text = "ECHO PARTY"
-horizontal_alignment = 1
+theme_override_constants/separation = 5
 
-[node name="Subtitle" type="Label" parent="Content"]
+[node name="Title" type="Label" parent="HUD/Health/Content"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.72, 0.76, 0.82, 1)
-theme_override_font_sizes/font_size = 18
-text = "Build the party your next run will inherit."
-horizontal_alignment = 1
-
-[node name="Status" type="Label" parent="Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.46, 0.52, 0.61, 1)
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
 theme_override_font_sizes/font_size = 14
-text = "Pre-production"
+text = "HEALTH"
 horizontal_alignment = 1
+
+[node name="HealthBar" type="ProgressBar" parent="HUD/Health/Content"]
+custom_minimum_size = Vector2(260, 22)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_health_background")
+theme_override_styles/fill = SubResource("StyleBoxFlat_health_fill")
+value = 100.0
+show_percentage = false
+
+[node name="HealthValue" type="Label" parent="HUD/Health/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 13
+text = "100 / 100"
+horizontal_alignment = 1
+
+[node name="Weapon" type="PanelContainer" parent="HUD"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -82.0
+offset_right = 110.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Content" type="VBoxContainer" parent="HUD/Weapon"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="HUD/Weapon/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.61, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "EQUIPPED WEAPON"
+horizontal_alignment = 1
+
+[node name="WeaponValue" type="Label" parent="HUD/Weapon/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.9, 0.64, 1)
+theme_override_font_sizes/font_size = 18
+text = "Sword"
+horizontal_alignment = 1
+
+[connection signal="defeated" from="Player" to="." method="_on_player_defeated"]
+[connection signal="health_changed" from="Player" to="." method="_on_player_health_changed"]
+[connection signal="weapon_changed" from="Player" to="." method="_on_player_weapon_changed"]
