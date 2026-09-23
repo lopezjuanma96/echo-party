@@ -1,0 +1,18 @@
+# Godot 4 generated files
+.godot/
+.import/
+*.translation
+
+# Local export configuration and credentials
+export.cfg
+export_credentials.cfg
+
+# Mono/C# generated files
+.mono/
+data_*/
+mono_crash.*.json
+
+# Editor and OS files
+*.tmp
+*~
+.DS_Store
