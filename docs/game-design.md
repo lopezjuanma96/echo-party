@@ -103,6 +103,50 @@ Enemies should create explicit role checks rather than merely gaining health:
 Early encounters should be survivable by a novice alone. Later encounters may
 be intentionally unreasonable without complementary echoes.
 
+## Combat And Controls
+
+Combat is real-time and movement is directly controlled with a keyboard or
+controller. The initial keyboard scheme uses `WASD` or arrow keys for movement
+and `Space` for a directional dodge roll. Click-to-move remains a possible
+alternative control scheme rather than the default.
+
+Skills use remappable action slots. A skill may execute immediately around the
+caster, use the actor's facing direction, wait for a ground coordinate, or
+require a valid unit target. Range and targeting rules belong to the skill,
+not to its keybinding. The exact default keys will be tested once skills exist.
+
+### Basic Attacks
+
+Basic attacks come from the equipped weapon rather than the hero's job. A
+weapon may be restricted to one or more jobs, but it grants the same basic
+attack to every job allowed to equip it. Basic attacks cost no mana, require a
+direction and an attack input, and use a weapon-specific internal cooldown.
+
+The default mouse scheme aims relative to the active hero and attacks with the
+left button. This maps naturally to aiming with a gamepad's right stick. Number
+keys and the mouse wheel switch equipped weapons in the prototype.
+
+Basic attacks may be melee shapes such as an arc or thrust, or physical ranged
+attacks such as a bolt that travels until it hits something or reaches its
+maximum distance.
+
+### Skills
+
+Skills are primarily learned from jobs and improved with level points. Unlike
+basic attacks, skills generally consume mana. Activating a skill enters one of
+four targeting modes:
+
+1. **Immediate:** resolves without a click, usually on the caster or in a
+   radius around them.
+2. **Directional:** waits for a direction, then performs a melee or ranged
+   action along it.
+3. **Ground:** waits for a visible map coordinate within range, then places an
+   area effect there.
+4. **Unit:** waits for a valid self, ally, enemy, or other target within range.
+
+Skill-slot keys remain undecided. Function keys and keys surrounding `WASD`
+are both candidates and must be remappable.
+
 ## Initial Jobs
 
 The combat proof uses only two first jobs:
@@ -116,8 +160,6 @@ meaningfully different.
 
 ## Open Design Questions
 
-- Is combat real-time, real-time with tactical pause, or room-based with
-  automatic pauses at level-up?
 - Does an extended echo history persist immediately or only after surviving a
   checkpoint?
 - Can the active hero issue focus, retreat, and formation commands to echoes?

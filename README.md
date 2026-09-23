@@ -44,6 +44,25 @@ Run the project from the command line with:
 godot --path .
 ```
 
+### Current controls
+
+- Move: `WASD` or arrow keys
+- Dodge roll: `Space`
+- Aim: mouse pointer
+- Basic attack: left mouse button
+- Equip sword or bolt: `1` / `2` or mouse wheel
+
+The controls use named Godot input actions so they can be exposed through a
+keybinding menu later.
+
+The movement sandbox currently includes wandering enemies. Contact removes
+health over time, dodge rolls avoid contact damage while active, and defeat
+returns the player to the center at full health.
+
+The sword attacks in a short 20-degree arc. The bolt travels until it hits an
+enemy or wall, or reaches its maximum range. Both basic attacks cost no mana
+and have independent weapon cooldowns.
+
 ## Licensing
 
 Project source code is available under the [MIT License](LICENSE).
