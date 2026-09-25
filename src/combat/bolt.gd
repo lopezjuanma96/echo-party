@@ -21,10 +21,11 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 
-func launch(spawn_position: Vector2, direction: Vector2) -> void:
+func launch(spawn_position: Vector2, direction: Vector2, attack_damage: float) -> void:
 	global_position = spawn_position
 	travel_direction = direction.normalized()
 	rotation = travel_direction.angle()
+	damage = attack_damage
 
 
 func _on_body_entered(body: Node2D) -> void:

@@ -14,14 +14,15 @@ MMORPGs, but uses an original setting, characters, systems, and assets.
 
 ## Status
 
-Pre-production. The first milestone is a combat proof of concept with:
+Pre-production. The current combat prototype includes:
 
 - one arena and one enemy family;
 - a player-controlled novice;
-- two first jobs with complementary abilities;
-- level-up choices and job advancement;
-- death, build recording, and run restart; and
-- one AI-controlled echo that follows its recorded build.
+- sword and bolt basic attacks;
+- enemy XP rewards and ordered Might/Vitality level-up choices; and
+- defeat and immediate arena reset.
+
+Jobs, echoes, and persistent roster resolution remain planned work.
 
 See [Game Design](docs/game-design.md), [Roadmap](docs/roadmap.md), and
 [Architecture](docs/architecture.md) for the current plan.
@@ -44,6 +45,12 @@ Run the project from the command line with:
 godot --path .
 ```
 
+Run the focused progression and XP reward checks with:
+
+```sh
+godot --headless --path . --script res://tests/test_hero_progression.gd
+```
+
 ### Current controls
 
 - Move: `WASD` or arrow keys
@@ -51,17 +58,25 @@ godot --path .
 - Aim: mouse pointer
 - Basic attack: left mouse button
 - Equip sword or bolt: `1` / `2` or mouse wheel
+- Choose Might or Vitality while leveling: `1` / `2` or the modal buttons
 
 The controls use named Godot input actions so they can be exposed through a
 keybinding menu later.
 
 The movement sandbox currently includes wandering enemies. Contact removes
 health over time, dodge rolls avoid contact damage while active, and defeat
-returns the player to the center at full health.
+returns the player to the center at full health. As a temporary prototype
+rule, this immediate defeat reset keeps the current run's level, XP, and build
+choices.
 
 The sword attacks in a short 20-degree arc. The bolt travels until it hits an
 enemy or wall, or reaches its maximum range. Both basic attacks cost no mana
 and have independent weapon cooldowns.
+
+Each enemy grants 50 XP once. A level is gained every 100 total XP, and each
+level queues one ordered attribute choice. The centered choice modal pauses
+combat while remaining interactive; if several levels were gained, choices
+are resolved one at a time.
 
 ## Licensing
 

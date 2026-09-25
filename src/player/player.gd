@@ -18,7 +18,6 @@ const SLASH_EFFECT := preload("res://src/combat/slash_effect.gd")
 @export var max_health := 100.0
 @export var damage_invulnerability := 0.35
 @export var spawn_invulnerability := 1.0
-@export var sword_damage := 25.0
 @export var sword_range := 82.0
 @export var sword_arc_degrees := 20.0
 @export var sword_cooldown := 0.42
@@ -33,6 +32,7 @@ var dodge_direction := Vector2.ZERO
 var dodge_time_left := 0.0
 var dodge_cooldown_left := 0.0
 var health := max_health
+var attack_damage := 25.0
 var invulnerability_time_left := 0.0
 var aim_direction := Vector2.RIGHT
 var selected_weapon := Weapon.SWORD
@@ -40,6 +40,7 @@ var attack_cooldowns := {
 	Weapon.SWORD: 0.0,
 	Weapon.BOLT: 0.0,
 }
+var suppress_combat_input := false
 
 
 func _ready() -> void:
@@ -54,7 +55,11 @@ func _physics_process(delta: float) -> void:
 	for weapon: Weapon in attack_cooldowns:
 		attack_cooldowns[weapon] = maxf(attack_cooldowns[weapon] - delta, 0.0)
 	_update_aim()
-	_update_weapon_selection()
+	if suppress_combat_input:
+		if not _is_combat_input_pressed():
+			suppress_combat_input = false
+	else:
+		_update_weapon_selection()
 
 	if dodge_time_left > 0.0:
 		dodge_time_left -= delta
@@ -77,7 +82,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	if (
-		Input.is_action_just_pressed(&"basic_attack")
+		not suppress_combat_input
+		and Input.is_action_just_pressed(&"basic_attack")
 		and attack_cooldowns[selected_weapon] <= 0.0
 		and dodge_time_left <= 0.0
 	):
@@ -143,13 +149,38 @@ func _swing_sword() -> void:
 			to_enemy.length() <= sword_range
 			and absf(aim_direction.angle_to(to_enemy.normalized())) <= half_arc
 		):
-			enemy.take_damage(sword_damage)
+			enemy.take_damage(attack_damage)
 
 
 func _fire_bolt() -> void:
 	var bolt := BOLT_SCENE.instantiate()
 	get_tree().current_scene.add_child(bolt)
-	bolt.launch(global_position + aim_direction * 34.0, aim_direction)
+	bolt.launch(global_position + aim_direction * 34.0, aim_direction, attack_damage)
+
+
+func apply_progression_stats(new_max_health: float, new_attack_damage: float) -> void:
+	var health_increase := new_max_health - max_health
+	max_health = new_max_health
+	attack_damage = new_attack_damage
+	if health_increase > 0.0:
+		health = minf(health + health_increase, max_health)
+	else:
+		health = minf(health, max_health)
+	health_changed.emit(health, max_health)
+
+
+func suppress_combat_input_until_released() -> void:
+	suppress_combat_input = true
+
+
+func _is_combat_input_pressed() -> bool:
+	return (
+		Input.is_action_pressed(&"basic_attack")
+		or Input.is_action_pressed(&"weapon_sword")
+		or Input.is_action_pressed(&"weapon_bolt")
+		or Input.is_action_pressed(&"weapon_previous")
+		or Input.is_action_pressed(&"weapon_next")
+	)
 
 
 func take_damage(amount: float) -> void:
