@@ -89,6 +89,15 @@ damage:
 Equipment is found, equipped, and lost within a run. Unlocks may add items to
 future drop pools, but should not guarantee stronger starting equipment.
 
+### Prototype Attribute Rules
+
+The current vertical slice uses stable attribute IDs `might` and `vitality`.
+Heroes begin at level 1 with 0 XP, 100 max health, and 25 attack damage. Every
+100 total XP grants a level and an ordered attribute choice. Might adds 5
+attack damage; Vitality adds 20 max health and raises current health by the
+same amount rather than fully healing. Derived stats are replayed from the
+ordered choices instead of being stored independently.
+
 ## Encounter Philosophy
 
 Enemies should create explicit role checks rather than merely gaining health:

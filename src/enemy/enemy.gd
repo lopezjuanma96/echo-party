@@ -1,12 +1,16 @@
 extends CharacterBody2D
 
 
+signal defeated(experience_reward: int)
+
+
 @export var move_speed := 90.0
 @export var contact_damage := 10.0
 @export var contact_interval := 0.5
 @export var min_direction_time := 0.7
 @export var max_direction_time := 2.0
 @export var max_health := 50.0
+@export var experience_reward := 50
 
 @onready var contact_area: Area2D = $ContactArea
 @onready var body: Polygon2D = $Body
@@ -17,6 +21,7 @@ var contact_time_left := 0.0
 var contact_target: Node = null
 var random := RandomNumberGenerator.new()
 var health := max_health
+var is_defeated := false
 
 
 func _ready() -> void:
@@ -70,8 +75,12 @@ func _on_contact_area_body_exited(body: Node2D) -> void:
 
 
 func take_damage(amount: float) -> void:
+	if is_defeated:
+		return
 	health = maxf(health - amount, 0.0)
 	if health <= 0.0:
+		is_defeated = true
+		defeated.emit(experience_reward)
 		queue_free()
 		return
 
