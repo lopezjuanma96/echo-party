@@ -17,12 +17,12 @@ MMORPGs, but uses an original setting, characters, systems, and assets.
 Pre-production. The current combat prototype includes:
 
 - one arena and one enemy family;
-- a player-controlled novice;
-- sword and bolt basic attacks;
-- enemy XP rewards and ordered Might/Vitality level-up choices; and
+- a player-controlled Novice that advances to Vanguard or Arcanist at level 3;
+- five weapon-defined basic attacks and job-exclusive loadouts;
+- renewable, deterministically seeded enemies and ordered level-up choices; and
 - defeat and immediate arena reset.
 
-Jobs, echoes, and persistent roster resolution remain planned work.
+Echoes and persistent roster resolution remain planned work.
 
 See [Game Design](docs/game-design.md), [Roadmap](docs/roadmap.md), and
 [Architecture](docs/architecture.md) for the current plan.
@@ -57,8 +57,8 @@ godot --headless --path . --script res://tests/test_hero_progression.gd
 - Dodge roll: `Space`
 - Aim: mouse pointer
 - Basic attack: left mouse button
-- Equip sword or bolt: `1` / `2` or mouse wheel
-- Choose Might or Vitality while leveling: `1` / `2` or the modal buttons
+- Select available weapon slot: `1` / `2` or mouse wheel
+- Choose an attribute or job while leveling: `1` / `2` or the modal buttons
 
 The controls use named Godot input actions so they can be exposed through a
 keybinding menu later.
@@ -69,14 +69,20 @@ returns the player to the center at full health. As a temporary prototype
 rule, this immediate defeat reset keeps the current run's level, XP, and build
 choices.
 
-The sword attacks in a short 20-degree arc. The bolt travels until it hits an
-enemy or wall, or reaches its maximum range. Both basic attacks cost no mana
-and have independent weapon cooldowns.
+The Novice has only a short, quick Knife arc, so slot 2 does nothing. At level
+3, Vanguard immediately equips Sword and Lance (a medium wide arc and a long
+narrow thrust), while Arcanist immediately equips Wand and Staff (a shorter,
+quicker projectile and a longer, slower projectile). Every basic attack uses
+the hero's progression-derived damage and costs no mana.
 
-Each enemy grants 50 XP once. A level is gained every 100 total XP, and each
-level queues one ordered attribute choice. The centered choice modal pauses
-combat while remaining interactive; if several levels were gained, choices
-are resolved one at a time.
+Each enemy grants 50 XP once. The seeded spawner replaces defeated enemies
+after a short delay and keeps seven in the arena; its delay stops while combat
+is paused. A level is gained every 100 total XP. Level 2 offers Might or
+Vitality, level 3 (200 total XP) offers Vanguard or Arcanist with no attribute
+choice, and level 4 onward returns to attributes. The centered choice modal
+pauses combat while remaining interactive; if several levels were gained,
+choices are resolved in order. Progression is temporarily unlimited, so every
+level after advancement continues to add an attribute choice.
 
 ## Licensing
 
