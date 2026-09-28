@@ -2,14 +2,20 @@ extends Node2D
 
 
 const LIFETIME := 0.14
-const ARC_RADIUS := 72.0
-const ARC_HALF_ANGLE := deg_to_rad(10.0)
-
 var time_left := LIFETIME
+var arc_radius := 72.0
+var arc_half_angle := deg_to_rad(10.0)
 
 
 func _ready() -> void:
 	z_index = 1
+	queue_redraw()
+
+
+func configure(attack_range: float, arc_degrees: float) -> void:
+	arc_radius = attack_range
+	arc_half_angle = deg_to_rad(arc_degrees / 2.0)
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -22,9 +28,9 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	draw_arc(
 		Vector2.ZERO,
-		ARC_RADIUS,
-		-ARC_HALF_ANGLE,
-		ARC_HALF_ANGLE,
+		arc_radius,
+		-arc_half_angle,
+		arc_half_angle,
 		12,
 		Color("78e6a3"),
 		8.0,

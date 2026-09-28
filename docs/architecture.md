@@ -22,6 +22,10 @@ Combat state, targeting, movement requests, cooldowns, effects, experience,
 and tactical policies. Random decisions receive a seeded random source so bugs
 and balance scenarios can be reproduced.
 
+The current arena's `EnemySpawner` owns target-population replacement, safe
+spawn selection, and per-enemy seeds. `Main` consumes its one-shot XP signal
+but does not own enemy lifecycle or random placement.
+
 ### Presentation
 
 Godot scenes for actors, animation, effects, camera, UI, and audio. Scenes read
@@ -55,6 +59,11 @@ LevelChoice
 
 Stable content IDs are essential. Save data should reference `skill_id` and
 `job_id`, never scene paths or translated display names.
+
+The current prototype stores one strict choice per level: attribute entries use
+`attribute_id`, while the level-3 advancement entry uses `job_id`. Weapon
+definitions are Resources keyed by stable weapon IDs; display names are only
+resolved by presentation code.
 
 ## Tactical AI
 

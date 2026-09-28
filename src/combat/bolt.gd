@@ -8,6 +8,8 @@ extends Area2D
 var travel_direction := Vector2.RIGHT
 var distance_traveled := 0.0
 
+@onready var body: Polygon2D = $Body
+
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
@@ -21,16 +23,26 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 
-func launch(spawn_position: Vector2, direction: Vector2, attack_damage: float) -> void:
+func launch(
+	spawn_position: Vector2,
+	direction: Vector2,
+	attack_damage: float,
+	travel_speed: float,
+	travel_distance: float,
+	color: Color
+) -> void:
 	global_position = spawn_position
 	travel_direction = direction.normalized()
 	rotation = travel_direction.angle()
 	damage = attack_damage
+	move_speed = travel_speed
+	max_distance = travel_distance
+	body.color = color
 
 
-func _on_body_entered(body: Node2D) -> void:
+func _on_body_entered(other: Node2D) -> void:
 	if is_queued_for_deletion():
 		return
-	if body.has_method(&"take_damage"):
-		body.take_damage(damage)
+	if other.has_method(&"take_damage"):
+		other.take_damage(damage)
 	queue_free()

@@ -3,10 +3,7 @@ extends CharacterBody2D
 
 signal health_changed(current_health: float, maximum_health: float)
 signal defeated
-signal weapon_changed(weapon_name: String)
-
-
-enum Weapon { SWORD, BOLT }
+signal weapon_changed(weapon_id: StringName)
 
 const BOLT_SCENE := preload("res://src/combat/bolt.tscn")
 const SLASH_EFFECT := preload("res://src/combat/slash_effect.gd")
@@ -18,11 +15,6 @@ const SLASH_EFFECT := preload("res://src/combat/slash_effect.gd")
 @export var max_health := 100.0
 @export var damage_invulnerability := 0.35
 @export var spawn_invulnerability := 1.0
-@export var sword_range := 82.0
-@export var sword_arc_degrees := 20.0
-@export var sword_cooldown := 0.42
-@export var bolt_cooldown := 0.62
-
 @onready var body: Polygon2D = $Body
 @onready var facing_marker: Polygon2D = $FacingMarker
 @onready var aim_marker: Polygon2D = $AimMarker
@@ -35,16 +27,15 @@ var health := max_health
 var attack_damage := 25.0
 var invulnerability_time_left := 0.0
 var aim_direction := Vector2.RIGHT
-var selected_weapon := Weapon.SWORD
-var attack_cooldowns := {
-	Weapon.SWORD: 0.0,
-	Weapon.BOLT: 0.0,
-}
+var weapon_loadout: Array[StringName] = [&"knife"]
+var selected_weapon_id := &"knife"
+var attack_cooldowns: Dictionary = {}
 var suppress_combat_input := false
 
 
 func _ready() -> void:
 	health = max_health
+	attack_cooldowns[selected_weapon_id] = 0.0
 	aim_marker.position = aim_direction * 34.0
 	aim_marker.rotation = aim_direction.angle() + PI / 2.0
 
@@ -52,8 +43,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	dodge_cooldown_left = maxf(dodge_cooldown_left - delta, 0.0)
 	invulnerability_time_left = maxf(invulnerability_time_left - delta, 0.0)
-	for weapon: Weapon in attack_cooldowns:
-		attack_cooldowns[weapon] = maxf(attack_cooldowns[weapon] - delta, 0.0)
+	for weapon_id: StringName in attack_cooldowns:
+		attack_cooldowns[weapon_id] = maxf(float(attack_cooldowns[weapon_id]) - delta, 0.0)
 	_update_aim()
 	if suppress_combat_input:
 		if not _is_combat_input_pressed():
@@ -84,7 +75,7 @@ func _physics_process(delta: float) -> void:
 	if (
 		not suppress_combat_input
 		and Input.is_action_just_pressed(&"basic_attack")
-		and attack_cooldowns[selected_weapon] <= 0.0
+		and float(attack_cooldowns.get(selected_weapon_id, 0.0)) <= 0.0
 		and dodge_time_left <= 0.0
 	):
 		_attack()
@@ -106,56 +97,101 @@ func _update_aim() -> void:
 
 
 func _update_weapon_selection() -> void:
-	if Input.is_action_just_pressed(&"weapon_sword"):
-		_select_weapon(Weapon.SWORD)
-	elif Input.is_action_just_pressed(&"weapon_bolt"):
-		_select_weapon(Weapon.BOLT)
+	if Input.is_action_just_pressed(&"weapon_slot_1"):
+		select_weapon_slot(0)
+	elif Input.is_action_just_pressed(&"weapon_slot_2"):
+		select_weapon_slot(1)
 	elif Input.is_action_just_pressed(&"weapon_previous"):
-		_select_weapon(Weapon.BOLT if selected_weapon == Weapon.SWORD else Weapon.SWORD)
+		cycle_weapon(-1)
 	elif Input.is_action_just_pressed(&"weapon_next"):
-		_select_weapon(Weapon.BOLT if selected_weapon == Weapon.SWORD else Weapon.SWORD)
+		cycle_weapon(1)
 
 
-func _select_weapon(weapon: Weapon) -> void:
-	if selected_weapon == weapon:
-		return
-	selected_weapon = weapon
-	weapon_changed.emit(get_selected_weapon_name())
+func select_weapon_slot(slot_index: int) -> bool:
+	if slot_index < 0 or slot_index >= weapon_loadout.size():
+		return false
+	return _select_weapon(weapon_loadout[slot_index])
 
 
-func get_selected_weapon_name() -> String:
-	return "Sword" if selected_weapon == Weapon.SWORD else "Bolt"
+func cycle_weapon(direction: int) -> bool:
+	if weapon_loadout.size() < 2 or direction == 0:
+		return false
+	var current_index := weapon_loadout.find(selected_weapon_id)
+	var next_index := posmod(current_index + direction, weapon_loadout.size())
+	return _select_weapon(weapon_loadout[next_index])
+
+
+func _select_weapon(weapon_id: StringName) -> bool:
+	if not weapon_loadout.has(weapon_id) or selected_weapon_id == weapon_id:
+		return false
+	selected_weapon_id = weapon_id
+	if not attack_cooldowns.has(weapon_id):
+		attack_cooldowns[weapon_id] = 0.0
+	weapon_changed.emit(selected_weapon_id)
+	return true
+
+
+func apply_job_loadout(job_id: StringName) -> bool:
+	var new_loadout := WeaponCatalog.get_loadout(job_id)
+	if new_loadout.is_empty():
+		return false
+	weapon_loadout = new_loadout
+	selected_weapon_id = weapon_loadout[0]
+	for weapon_id in weapon_loadout:
+		if not attack_cooldowns.has(weapon_id):
+			attack_cooldowns[weapon_id] = 0.0
+	weapon_changed.emit(selected_weapon_id)
+	return true
+
+
+func get_selected_weapon_id() -> StringName:
+	return selected_weapon_id
+
+
+func get_weapon_loadout() -> Array[StringName]:
+	return weapon_loadout.duplicate()
 
 
 func _attack() -> void:
-	if selected_weapon == Weapon.SWORD:
-		_swing_sword()
-		attack_cooldowns[Weapon.SWORD] = sword_cooldown
+	var weapon := WeaponCatalog.get_weapon(selected_weapon_id)
+	if weapon == null:
+		push_error("Unknown selected weapon ID: %s" % selected_weapon_id)
+		return
+	if weapon.attack_kind == WeaponDefinition.AttackKind.MELEE:
+		_swing_melee(weapon)
 	else:
-		_fire_bolt()
-		attack_cooldowns[Weapon.BOLT] = bolt_cooldown
+		_fire_projectile(weapon)
+	attack_cooldowns[selected_weapon_id] = weapon.cooldown
 
 
-func _swing_sword() -> void:
+func _swing_melee(weapon: WeaponDefinition) -> void:
 	var slash := SLASH_EFFECT.new()
 	get_tree().current_scene.add_child(slash)
 	slash.global_position = global_position
 	slash.rotation = aim_direction.angle()
+	slash.configure(weapon.attack_range, weapon.arc_degrees)
 
-	var half_arc := deg_to_rad(sword_arc_degrees / 2.0)
+	var half_arc := deg_to_rad(weapon.arc_degrees / 2.0)
 	for enemy: Node2D in get_tree().get_nodes_in_group(&"enemies"):
 		var to_enemy := enemy.global_position - global_position
 		if (
-			to_enemy.length() <= sword_range
+			to_enemy.length() <= weapon.attack_range
 			and absf(aim_direction.angle_to(to_enemy.normalized())) <= half_arc
 		):
 			enemy.take_damage(attack_damage)
 
 
-func _fire_bolt() -> void:
+func _fire_projectile(weapon: WeaponDefinition) -> void:
 	var bolt := BOLT_SCENE.instantiate()
 	get_tree().current_scene.add_child(bolt)
-	bolt.launch(global_position + aim_direction * 34.0, aim_direction, attack_damage)
+	bolt.launch(
+		global_position + aim_direction * 34.0,
+		aim_direction,
+		attack_damage,
+		weapon.projectile_speed,
+		weapon.attack_range,
+		weapon.projectile_color
+	)
 
 
 func apply_progression_stats(new_max_health: float, new_attack_damage: float) -> void:
@@ -176,8 +212,8 @@ func suppress_combat_input_until_released() -> void:
 func _is_combat_input_pressed() -> bool:
 	return (
 		Input.is_action_pressed(&"basic_attack")
-		or Input.is_action_pressed(&"weapon_sword")
-		or Input.is_action_pressed(&"weapon_bolt")
+		or Input.is_action_pressed(&"weapon_slot_1")
+		or Input.is_action_pressed(&"weapon_slot_2")
 		or Input.is_action_pressed(&"weapon_previous")
 		or Input.is_action_pressed(&"weapon_next")
 	)

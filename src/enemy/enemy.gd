@@ -20,16 +20,22 @@ var direction_time_left := 0.0
 var contact_time_left := 0.0
 var contact_target: Node = null
 var random := RandomNumberGenerator.new()
+var simulation_seed := 1
 var health := max_health
 var is_defeated := false
 
 
 func _ready() -> void:
 	health = max_health
-	random.randomize()
+	random.seed = simulation_seed
 	contact_area.body_entered.connect(_on_contact_area_body_entered)
 	contact_area.body_exited.connect(_on_contact_area_body_exited)
 	_choose_direction()
+
+
+func set_simulation_seed(value: int) -> void:
+	simulation_seed = value
+	random.seed = simulation_seed
 
 
 func _physics_process(delta: float) -> void:

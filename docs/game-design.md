@@ -92,11 +92,14 @@ future drop pools, but should not guarantee stronger starting equipment.
 ### Prototype Attribute Rules
 
 The current vertical slice uses stable attribute IDs `might` and `vitality`.
-Heroes begin at level 1 with 0 XP, 100 max health, and 25 attack damage. Every
-100 total XP grants a level and an ordered attribute choice. Might adds 5
-attack damage; Vitality adds 20 max health and raises current health by the
-same amount rather than fully healing. Derived stats are replayed from the
-ordered choices instead of being stored independently.
+Heroes begin at level 1 with 0 XP, 100 max health, 25 attack damage, and the
+`novice` job. Every 100 total XP grants a level and exactly one ordered build
+choice. Level 2 offers Might or Vitality. Level 3 is the advancement level at
+200 total XP and offers `vanguard` or `arcanist` instead of an attribute.
+Level 4 and every later level return to attributes; progression is temporarily
+unlimited in this prototype. Might adds 5 attack damage; Vitality adds 20 max
+health and raises current health by the same amount rather than fully healing.
+Derived stats and job state are replayed from the same ordered `choices` array.
 
 ## Encounter Philosophy
 
@@ -139,6 +142,13 @@ Basic attacks may be melee shapes such as an arc or thrust, or physical ranged
 attacks such as a bolt that travels until it hits something or reaches its
 maximum distance.
 
+The prototype has five stable weapon IDs. Novices equip only `knife`, a short,
+quick melee arc; their second slot therefore does nothing. Vanguards equip
+`sword`, a medium and wider melee arc, and `lance`, a long and narrow melee
+thrust. Arcanists equip `wand`, a shorter and quicker projectile, and `staff`,
+a longer and slower projectile. Advancing changes the loadout immediately and
+selects its first slot. All five use progression-derived attack damage.
+
 ### Skills
 
 Skills are primarily learned from jobs and improved with level points. Unlike
@@ -163,9 +173,21 @@ The combat proof uses only two first jobs:
 - **Vanguard:** holds attention, interrupts, and protects an ally.
 - **Arcanist:** deals ranged elemental damage and exploits controlled enemies.
 
+For this vertical slice, jobs are distinguished only by exclusive weapon
+loadouts: Vanguard uses Sword/Lance and Arcanist uses Wand/Staff. Skills, mana,
+and passives are not implemented yet.
+
 Names and abilities are placeholders. The pair exists to test whether a
 recorded defender and a newly controlled damage dealer, or the reverse, feels
 meaningfully different.
+
+## Prototype Enemy Population
+
+The arena maintains seven wandering enemies. Each defeated enemy awards its XP
+once and is replaced after a short delay. Spawn choices use fixed seeds, stay
+inside the arena, avoid the active hero, and prefer separation from existing
+enemies. Because spawning follows paused simulation time, replacements cannot
+appear behind a level-choice modal.
 
 ## Open Design Questions
 
