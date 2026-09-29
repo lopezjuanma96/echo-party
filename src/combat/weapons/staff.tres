@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"staff"
+display_name = "Staff"
+attack_kind = 1
+cooldown = 0.72
+attack_range = 760.0
+projectile_speed = 500.0
+projectile_color = Color(0.72, 0.42, 1, 1)
