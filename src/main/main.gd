@@ -1,6 +1,7 @@
 extends Node2D
 
 
+const ECHO_SCENE := preload("res://src/echo/echo.tscn")
 const DEFAULT_KEY_BINDINGS := {
 	&"move_left": [KEY_A, KEY_LEFT],
 	&"move_right": [KEY_D, KEY_RIGHT],
@@ -23,22 +24,28 @@ const DEFAULT_MOUSE_BINDINGS := {
 @onready var level_value: Label = $HUD/Progression/Content/LevelValue
 @onready var job_value: Label = $HUD/Progression/Content/JobValue
 @onready var experience_value: Label = $HUD/Progression/Content/ExperienceValue
+@onready var run_value: Label = $HUD/RunStatus/Content/RunValue
+@onready var echo_value: Label = $HUD/RunStatus/Content/EchoValue
 @onready var choice_modal: Control = $HUD/ChoiceModal
 @onready var choice_title: Label = $HUD/ChoiceModal/Center/Panel/Margin/Content/Title
 @onready var choice_one_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceOne
 @onready var choice_two_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceTwo
 
 var progression := HeroProgression.new()
+var run_number := 1
+var latest_echo_record: HeroRecord
+var echo: EchoActor
+var _defeat_transition_pending := false
 
 
 func _ready() -> void:
 	_setup_default_bindings()
 	_setup_choice_shortcuts()
-	player.apply_job_loadout(progression.get_job_id())
-	player.apply_progression_stats(progression.get_max_health(), progression.get_attack_damage())
+	player.apply_progression(progression, true)
 	_on_player_health_changed(player.health, player.max_health)
 	_on_player_weapon_changed(player.get_selected_weapon_id())
 	_update_progression_hud()
+	_update_run_hud()
 
 
 func _setup_default_bindings() -> void:
@@ -72,7 +79,63 @@ func _on_player_health_changed(current_health: float, maximum_health: float) -> 
 
 
 func _on_player_defeated() -> void:
-	player.reset_at(Vector2.ZERO)
+	if _defeat_transition_pending:
+		return
+	_defeat_transition_pending = true
+	choice_modal.hide()
+	get_tree().paused = false
+	call_deferred(&"_start_next_run")
+
+
+func _start_next_run() -> void:
+	choice_modal.hide()
+	get_tree().paused = false
+	latest_echo_record = HeroRecord.capture(
+		"hero-%d" % run_number,
+		"Hero %d" % run_number,
+		progression
+	)
+	_clear_transient_combat()
+	if is_instance_valid(echo):
+		echo.free()
+		echo = null
+
+	run_number += 1
+	progression = HeroProgression.new()
+	player.reset_for_new_run(Vector2.ZERO)
+	_spawn_latest_echo()
+	_on_player_health_changed(player.health, player.max_health)
+	_on_player_weapon_changed(player.get_selected_weapon_id())
+	_update_progression_hud()
+	_update_run_hud()
+	_defeat_transition_pending = false
+
+
+func _spawn_latest_echo() -> void:
+	if latest_echo_record == null:
+		return
+	echo = ECHO_SCENE.instantiate() as EchoActor
+	if echo == null:
+		return
+	echo.position = player.position + Vector2(92.0, 0.0)
+	add_child(echo)
+	if not echo.configure(latest_echo_record, player):
+		echo.queue_free()
+		echo = null
+		return
+	echo.defeated.connect(_on_echo_defeated)
+
+
+func _on_echo_defeated() -> void:
+	if is_instance_valid(echo):
+		echo.queue_free()
+	echo = null
+	_update_run_hud(true)
+
+
+func _clear_transient_combat() -> void:
+	for transient in get_tree().get_nodes_in_group(HeroActor.TRANSIENT_COMBAT_GROUP):
+		transient.queue_free()
 
 
 func _on_player_weapon_changed(weapon_id: StringName) -> void:
@@ -93,6 +156,8 @@ func _set_button_shortcut(button: Button, keycode: Key) -> void:
 
 
 func _on_enemy_defeated(experience_reward: int) -> void:
+	if _defeat_transition_pending:
+		return
 	progression.grant_experience(experience_reward)
 	_update_progression_hud()
 	_show_next_choice_if_needed()
@@ -162,6 +227,23 @@ func _update_progression_hud() -> void:
 		progression.get_experience_into_level(),
 		HeroProgression.XP_PER_LEVEL,
 	]
+
+
+func _update_run_hud(echo_defeated: bool = false) -> void:
+	run_value.text = "Run %d" % run_number
+	if latest_echo_record == null:
+		echo_value.text = "Echo: None"
+		return
+	var replayed := latest_echo_record.replay_progression()
+	if replayed == null:
+		echo_value.text = "Echo: Invalid"
+	elif echo_defeated:
+		echo_value.text = "Echo: Defeated"
+	else:
+		echo_value.text = "Echo: %s · Level %d" % [
+			_job_display_name(replayed.get_job_id()),
+			replayed.level,
+		]
 
 
 func _job_display_name(job_id: StringName) -> String:

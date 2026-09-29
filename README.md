@@ -19,10 +19,11 @@ Pre-production. The current combat prototype includes:
 - one arena and one enemy family;
 - a player-controlled Novice that advances to Vanguard or Arcanist at level 3;
 - five weapon-defined basic attacks and job-exclusive loadouts;
-- renewable, deterministically seeded enemies and ordered level-up choices; and
-- defeat and immediate arena reset.
+- renewable, deterministically seeded enemies and ordered level-up choices;
+- an inspectable tactical echo built by replaying the previous hero's record; and
+- defeat followed by a fresh numbered run beside that echo.
 
-Echoes and persistent roster resolution remain planned work.
+Persistent roster and memorial resolution remain planned work.
 
 See [Game Design](docs/game-design.md), [Roadmap](docs/roadmap.md), and
 [Architecture](docs/architecture.md) for the current plan.
@@ -49,6 +50,7 @@ Run the focused progression and XP reward checks with:
 
 ```sh
 godot --headless --path . --script res://tests/test_hero_progression.gd
+godot --headless --path . --script res://tests/test_echo.gd
 ```
 
 ### Current controls
@@ -63,11 +65,20 @@ godot --headless --path . --script res://tests/test_hero_progression.gd
 The controls use named Godot input actions so they can be exposed through a
 keybinding menu later.
 
-The movement sandbox currently includes wandering enemies. Contact removes
-health over time, dodge rolls avoid contact damage while active, and defeat
-returns the player to the center at full health. As a temporary prototype
-rule, this immediate defeat reset keeps the current run's level, XP, and build
-choices.
+The movement sandbox currently includes wandering enemies. Contact can damage
+the active hero or echo, and dodge rolls avoid active-hero contact damage while
+the roll is active. On active-hero defeat, the completed build is captured in
+memory and the next numbered run starts at the center as a full-health level-1
+Novice with Knife, 0 XP, and cleared attack/dodge/input state.
+
+The temporary first-echo rules keep only the newest fallen hero. It replaces
+the prior echo and spawns near the new active hero with its recorded level,
+attributes, job, stats, and loadout replayed. There is no disk persistence,
+roster, or memorial yet. The echo follows the active hero and deterministically
+selects nearby enemies and range-appropriate weapons. Echo kills grant XP to
+the current active run through the same enemy reward signal. Enemy contact can
+defeat the echo; a defeated echo stays absent for the rest of that run and only
+returns if a later active hero is recorded as the new echo.
 
 The Novice has only a short, quick Knife arc, so slot 2 does nothing. At level
 3, Vanguard immediately equips Sword and Lance (a medium wide arc and a long

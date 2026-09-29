@@ -219,6 +219,31 @@ theme_override_font_sizes/font_size = 14
 text = "XP 0 / 100"
 horizontal_alignment = 1
 
+[node name="RunStatus" type="PanelContainer" parent="HUD"]
+offset_left = 20.0
+offset_top = 98.0
+offset_right = 286.0
+offset_bottom = 146.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Content" type="VBoxContainer" parent="HUD/RunStatus"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="RunValue" type="Label" parent="HUD/RunStatus/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.9, 0.64, 1)
+theme_override_font_sizes/font_size = 16
+text = "Run 1"
+horizontal_alignment = 1
+
+[node name="EchoValue" type="Label" parent="HUD/RunStatus/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Echo: None"
+horizontal_alignment = 1
+
 [node name="ChoiceModal" type="Control" parent="HUD"]
 process_mode = 3
 visible = false

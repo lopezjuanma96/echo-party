@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/echo/echo.gd" id="1_echo"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_echo"]
+size = Vector2(36, 48)
+
+[node name="Echo" type="CharacterBody2D" groups=["friendly_actors"]]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_echo")
+
+[node name="Body" type="Polygon2D" parent="."]
+polygon = PackedVector2Array(-18, -24, 18, -24, 18, 24, -18, 24)
+color = Color(0.25, 0.78, 0.94, 0.58)
+
+[node name="AimMarker" type="Polygon2D" parent="."]
+position = Vector2(34, 0)
+polygon = PackedVector2Array(-6, -3, 6, -3, 0, -12)
+color = Color(0.72, 0.42, 1, 0.72)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_echo")
+
+[node name="EchoLabel" type="Label" parent="."]
+offset_left = -82.0
+offset_top = -51.0
+offset_right = 82.0
+offset_bottom = -27.0
+theme_override_colors/font_color = Color(0.25, 0.45, 0.65, 1)
+theme_override_font_sizes/font_size = 12
+text = "ECHO"
+horizontal_alignment = 1

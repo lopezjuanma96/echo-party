@@ -16,6 +16,11 @@ Plain scripts and resources for attributes, jobs, skills, level choices, build
 histories, party rosters, and run results. These rules should be testable
 without rendering a combat scene.
 
+For the first-echo slice, `HeroRecord` is the only run-to-run domain object. It
+owns a stable runtime ID, display name, and a deep-copied strict JSON-safe
+progression document. It validates by replaying `HeroProgression`; it is held
+in memory only and does not imply a roster, memorial, or save format.
+
 ### Simulation
 
 Combat state, targeting, movement requests, cooldowns, effects, experience,
@@ -26,11 +31,23 @@ The current arena's `EnemySpawner` owns target-population replacement, safe
 spawn selection, and per-enemy seeds. `Main` consumes its one-shot XP signal
 but does not own enemy lifecycle or random placement.
 
+`HeroActor` is the smallest shared combat contract for active heroes and
+echoes: health, progression-derived stats, stable weapon loadouts, cooldowns,
+aiming, and melee/projectile execution. Player code adds direct input,
+movement, and dodge behavior. Echo code adds the deterministic tactical policy
+(follow, leash-bounded target selection with stable spawn-order ties,
+range-aware weapon choice, approach/retreat, and exposed intent). It reuses the
+same attack semantics rather than implementing parallel weapon behavior.
+
 ### Presentation
 
 Godot scenes for actors, animation, effects, camera, UI, and audio. Scenes read
 simulation state and submit player intent; they should not own permanent hero
 data.
+
+`Main` currently coordinates the in-memory defeat transition, newest-echo-only
+replacement, shared XP routing from `EnemySpawner`, and concise run/echo HUD.
+This is temporary run orchestration, not persistence or roster resolution.
 
 ### Persistence
 
