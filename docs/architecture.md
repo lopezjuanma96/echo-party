@@ -38,6 +38,11 @@ movement, and dodge behavior. Echo code adds the deterministic tactical policy
 (follow, leash-bounded target selection with stable spawn-order ties,
 range-aware weapon choice, approach/retreat, and exposed intent). It reuses the
 same attack semantics rather than implementing parallel weapon behavior.
+Each echo owns fresh runtime `HeroProgression`, receives the same XP reward as
+the active hero, and applies the corresponding ordered choice from its
+`HeroRecord` when it reaches that level. The record remains immutable; runtime
+progression stops at its highest fully recorded level until history extension
+is implemented.
 
 ### Presentation
 

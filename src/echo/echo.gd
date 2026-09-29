@@ -2,6 +2,8 @@ class_name EchoActor
 extends HeroActor
 
 
+signal progression_changed
+
 @export var move_speed := 220.0
 @export var target_leash := 620.0
 @export var follow_distance := 105.0
@@ -9,27 +11,75 @@ extends HeroActor
 
 var active_hero: Node2D
 var hero_record: HeroRecord
+var progression := HeroProgression.new()
 var job_id := HeroProgression.JOB_NOVICE
 var current_target: Node2D
 var current_intent := &"idle"
+var _recorded_choices: Array[Dictionary] = []
+var _replay_level_limit := 1
 
 
 func configure(record: HeroRecord, new_active_hero: Node2D) -> bool:
 	if record == null or new_active_hero == null:
 		return false
-	var replayed := record.replay_progression()
-	if replayed == null:
+	var recorded_progression := record.replay_progression()
+	if recorded_progression == null:
 		return false
 	hero_record = record
 	active_hero = new_active_hero
-	job_id = replayed.get_job_id()
-	if not apply_progression(replayed, true):
+	_recorded_choices = recorded_progression.get_choices()
+	_replay_level_limit = mini(recorded_progression.level, _recorded_choices.size() + 1)
+	progression = HeroProgression.new()
+	job_id = HeroProgression.JOB_NOVICE
+	if not apply_progression(progression, true):
 		return false
 	reset_actor(position, true)
+	_update_label()
+	return true
+
+
+func grant_shared_experience(amount: int) -> int:
+	if amount <= 0 or progression.level >= _replay_level_limit:
+		return 0
+	var maximum_experience := (_replay_level_limit - 1) * HeroProgression.XP_PER_LEVEL
+	var granted_amount := mini(amount, maximum_experience - progression.experience)
+	var levels_gained := progression.grant_experience(granted_amount)
+	for choice_level in progression.get_pending_choice_levels():
+		var choice_index := choice_level - 2
+		if choice_index < 0 or choice_index >= _recorded_choices.size():
+			push_error("Missing recorded choice at level %d" % choice_level)
+			break
+		var choice := _recorded_choices[choice_index]
+		var applied := false
+		if choice.has("job_id"):
+			applied = progression.apply_job_choice(choice_level, StringName(choice["job_id"]))
+		elif choice.has("attribute_id"):
+			applied = progression.apply_attribute_choice(
+				choice_level,
+				StringName(choice["attribute_id"])
+			)
+		if not applied:
+			push_error("Failed to replay recorded choice at level %d" % choice_level)
+			break
+	if levels_gained > 0:
+		job_id = progression.get_job_id()
+		apply_progression(progression)
+		_update_label()
+		progression_changed.emit()
+	return levels_gained
+
+
+func get_replay_level_limit() -> int:
+	return _replay_level_limit
+
+
+func _update_label() -> void:
 	var label := get_node_or_null("EchoLabel") as Label
 	if label != null:
-		label.text = "ECHO · %s · Lv %d" % [record.display_name, replayed.level]
-	return true
+		label.text = "ECHO · %s · Lv %d" % [
+			hero_record.display_name,
+			progression.level,
+		]
 
 
 func _physics_process(delta: float) -> void:

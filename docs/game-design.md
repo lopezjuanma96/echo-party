@@ -69,18 +69,22 @@ The current temporary rules are intentionally narrower than the eventual
 roster loop. Active-hero defeat snapshots a strict, ordered `HeroRecord` in
 memory, increments the visible run number, and immediately starts a full-health
 level-1 Novice with Knife and 0 XP. Only the newest record is retained: its echo
-replaces any previous echo and replays the recorded level, attributes, derived
-stats, job, and loadout. There is no disk persistence, roster choice, or
-memorial behavior in this slice.
+replaces any previous echo but also starts as a level-1 Novice. Each enemy
+reward grants equal XP to the active hero and echo. At each echo level, its
+recorded attribute or job choice is applied automatically, deriving the same
+stats and loadout in order rather than restoring the fallen hero's terminal
+state immediately. There is no disk persistence, roster choice, or memorial
+behavior in this slice.
 
 The echo follows the active hero while idle and uses deterministic target and
 range-aware weapon selection within a leash around that hero. Vanguard closes
 to melee range; Arcanist approaches when out of range and retreats when an
-enemy is too close. Enemy rewards are shared progression: every enemy defeat,
-including an echo kill, grants XP to the current active run. Echoes have health
-and can take enemy contact damage. A defeated echo is absent for the remainder
-of that run and returns only when a later fallen active hero creates the newest
-record.
+enemy is too close. Every enemy defeat, including an echo kill, advances both
+the active hero and the echo. For now, an echo stops at the highest level whose
+choice is complete in its record; extending that history remains later work.
+Echoes have health and can take enemy contact damage. A defeated echo is absent
+for the remainder of that run and returns only when a later fallen active hero
+creates the newest record.
 
 ## Death And Roster Resolution
 

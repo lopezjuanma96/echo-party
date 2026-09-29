@@ -72,13 +72,15 @@ memory and the next numbered run starts at the center as a full-health level-1
 Novice with Knife, 0 XP, and cleared attack/dodge/input state.
 
 The temporary first-echo rules keep only the newest fallen hero. It replaces
-the prior echo and spawns near the new active hero with its recorded level,
-attributes, job, stats, and loadout replayed. There is no disk persistence,
-roster, or memorial yet. The echo follows the active hero and deterministically
-selects nearby enemies and range-appropriate weapons. Echo kills grant XP to
-the current active run through the same enemy reward signal. Enemy contact can
-defeat the echo; a defeated echo stays absent for the rest of that run and only
-returns if a later active hero is recorded as the new echo.
+the prior echo and spawns near the new active hero as a level-1 Novice. Every
+enemy reward grants the same XP to the active hero and echo; as the echo levels,
+it automatically replays the fallen hero's recorded attribute and job choices
+in order. It stops at the highest fully recorded level until history extension
+is implemented. There is no disk persistence, roster, or memorial yet. The echo
+follows the active hero and deterministically selects nearby enemies and
+range-appropriate weapons. Enemy contact can defeat the echo; a defeated echo
+stays absent for the rest of that run and only returns if a later active hero
+is recorded as the new echo.
 
 The Novice has only a short, quick Knife arc, so slot 2 does nothing. At level
 3, Vanguard immediately equips Sword and Lance (a medium wide arc and a long

@@ -36,6 +36,7 @@ var run_number := 1
 var latest_echo_record: HeroRecord
 var echo: EchoActor
 var _defeat_transition_pending := false
+var _echo_was_defeated := false
 
 
 func _ready() -> void:
@@ -102,6 +103,7 @@ func _start_next_run() -> void:
 
 	run_number += 1
 	progression = HeroProgression.new()
+	_echo_was_defeated = false
 	player.reset_for_new_run(Vector2.ZERO)
 	_spawn_latest_echo()
 	_on_player_health_changed(player.health, player.max_health)
@@ -124,13 +126,15 @@ func _spawn_latest_echo() -> void:
 		echo = null
 		return
 	echo.defeated.connect(_on_echo_defeated)
+	echo.progression_changed.connect(_update_run_hud)
 
 
 func _on_echo_defeated() -> void:
+	_echo_was_defeated = true
 	if is_instance_valid(echo):
 		echo.queue_free()
 	echo = null
-	_update_run_hud(true)
+	_update_run_hud()
 
 
 func _clear_transient_combat() -> void:
@@ -159,7 +163,10 @@ func _on_enemy_defeated(experience_reward: int) -> void:
 	if _defeat_transition_pending:
 		return
 	progression.grant_experience(experience_reward)
+	if is_instance_valid(echo):
+		echo.grant_shared_experience(experience_reward)
 	_update_progression_hud()
+	_update_run_hud()
 	_show_next_choice_if_needed()
 
 
@@ -229,21 +236,20 @@ func _update_progression_hud() -> void:
 	]
 
 
-func _update_run_hud(echo_defeated: bool = false) -> void:
+func _update_run_hud() -> void:
 	run_value.text = "Run %d" % run_number
 	if latest_echo_record == null:
 		echo_value.text = "Echo: None"
 		return
-	var replayed := latest_echo_record.replay_progression()
-	if replayed == null:
-		echo_value.text = "Echo: Invalid"
-	elif echo_defeated:
+	if _echo_was_defeated:
 		echo_value.text = "Echo: Defeated"
-	else:
+	elif is_instance_valid(echo):
 		echo_value.text = "Echo: %s · Level %d" % [
-			_job_display_name(replayed.get_job_id()),
-			replayed.level,
+			_job_display_name(echo.job_id),
+			echo.progression.level,
 		]
+	else:
+		echo_value.text = "Echo: Unavailable"
 
 
 func _job_display_name(job_id: StringName) -> String:
