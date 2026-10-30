@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/gpt-5.6-sol",
+  "small_model": "openai/gpt-5.6-luna",
+  "instructions": ["AGENTS.md"],
+  "subagent_depth": 1,
+  "mcp": {
+    "godot": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@satelliteoflove/godot-mcp@4.1.11"
+      ],
+      "enabled": true,
+      "timeout": 10000,
+      "environment": {
+        "GODOT_MCP_USAGE_LOG": "false"
+      }
+    }
+  },
+  "permission": {
+    "godot_*": "deny"
+  }
+}

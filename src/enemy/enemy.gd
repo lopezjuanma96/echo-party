@@ -1,9 +1,13 @@
+class_name EnemyActor
 extends CharacterBody2D
 
 
 signal defeated(experience_reward: int)
+signal dealt_damage(enemy_id: StringName, target: Node, applied: float)
 
 
+@export var enemy_id := &"drifter"
+@export var enemy_name := "Drifter"
 @export var move_speed := 90.0
 @export var contact_damage := 10.0
 @export var contact_interval := 0.5
@@ -11,6 +15,7 @@ signal defeated(experience_reward: int)
 @export var max_direction_time := 2.0
 @export var max_health := 50.0
 @export var experience_reward := 50
+@export var spawn_grace := 0.0
 
 @onready var contact_area: Area2D = $ContactArea
 @onready var body: Polygon2D = $Body
@@ -24,10 +29,13 @@ var simulation_seed := 1
 var stable_spawn_order := 0
 var health := max_health
 var is_defeated := false
+var _base_body_color := Color.WHITE
+var _spawn_grace_elapsed := 0.0
 
 
 func _ready() -> void:
 	health = max_health
+	_base_body_color = body.color
 	random.seed = simulation_seed
 	_choose_direction()
 
@@ -38,6 +46,9 @@ func set_simulation_seed(value: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _advance_spawn_grace(delta):
+		velocity = Vector2.ZERO
+		return
 	direction_time_left -= delta
 	if direction_time_left <= 0.0:
 		_choose_direction()
@@ -50,6 +61,18 @@ func _physics_process(delta: float) -> void:
 		direction_time_left = random.randf_range(min_direction_time, max_direction_time)
 
 	_damage_contact(delta)
+
+
+func _advance_spawn_grace(delta: float) -> bool:
+	if spawn_grace <= 0.0:
+		return false
+	_spawn_grace_elapsed += delta
+	spawn_grace = maxf(spawn_grace - delta, 0.0)
+	var pulse := 0.5 + 0.5 * sin(_spawn_grace_elapsed * 18.0)
+	body.color = Color(_base_body_color, lerpf(0.35, 1.0, pulse))
+	if spawn_grace <= 0.0:
+		body.color = _base_body_color
+	return true
 
 
 func _choose_direction() -> void:
@@ -68,7 +91,7 @@ func _damage_contact(delta: float) -> void:
 
 	contact_time_left -= delta
 	if contact_time_left <= 0.0:
-		contact_target.take_damage(contact_damage)
+		_deal_damage(contact_target, contact_damage)
 		contact_time_left = contact_interval
 
 
@@ -92,8 +115,15 @@ func _choose_contact_target() -> Node2D:
 	return best
 
 
-func take_damage(amount: float) -> void:
-	if is_defeated:
+func _deal_damage(target: Node, amount: float) -> void:
+	var health_before := float(target.get("health"))
+	target.take_damage(amount)
+	var applied := health_before - float(target.get("health"))
+	dealt_damage.emit(enemy_id, target, applied)
+
+
+func take_damage(amount: float, interrupts: bool = false) -> void:
+	if is_defeated or spawn_grace > 0.0:
 		return
 	health = maxf(health - amount, 0.0)
 	if health <= 0.0:
@@ -101,7 +131,30 @@ func take_damage(amount: float) -> void:
 		defeated.emit(experience_reward)
 		queue_free()
 		return
+	_on_damaged(amount, interrupts)
 
+
+func _on_damaged(_amount: float, _interrupts: bool) -> void:
 	body.color = Color("78e6a3")
 	var hit_tween := create_tween()
-	hit_tween.tween_property(body, "color", Color("db1a21"), 0.12)
+	hit_tween.tween_property(body, "color", _base_body_color, 0.12)
+
+
+func is_casting() -> bool:
+	return false
+
+
+func _mcp_state() -> Dictionary:
+	return {
+		"enemy_id": String(enemy_id),
+		"pos_x": global_position.x,
+		"pos_y": global_position.y,
+		"health": health,
+		"max_health": max_health,
+		"state": "spawn_grace" if spawn_grace > 0.0 else ("defeated" if is_defeated else "wander"),
+		"cast_progress": 0.0,
+		"move_speed": move_speed,
+		"contact_damage": contact_damage,
+		"contact_interval": contact_interval,
+		"stable_spawn_order": stable_spawn_order,
+	}

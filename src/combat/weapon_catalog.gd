@@ -7,6 +7,8 @@ const SWORD: WeaponDefinition = preload("res://src/combat/weapons/sword.tres")
 const LANCE: WeaponDefinition = preload("res://src/combat/weapons/lance.tres")
 const WAND: WeaponDefinition = preload("res://src/combat/weapons/wand.tres")
 const STAFF: WeaponDefinition = preload("res://src/combat/weapons/staff.tres")
+const MACE: WeaponDefinition = preload("res://src/combat/weapons/mace.tres")
+const SLING: WeaponDefinition = preload("res://src/combat/weapons/sling.tres")
 
 const WEAPONS := {
 	&"knife": KNIFE,
@@ -14,11 +16,14 @@ const WEAPONS := {
 	&"lance": LANCE,
 	&"wand": WAND,
 	&"staff": STAFF,
+	&"mace": MACE,
+	&"sling": SLING,
 }
 const LOADOUTS := {
 	&"novice": [&"knife"],
 	&"vanguard": [&"sword", &"lance"],
 	&"arcanist": [&"wand", &"staff"],
+	&"mender": [&"mace", &"sling"],
 }
 
 

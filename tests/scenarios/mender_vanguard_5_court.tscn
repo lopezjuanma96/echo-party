@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+[node name="MenderVanguard5Court" type="Node"]
+script = ExtResource("1_launcher")
+player_job = &"mender"
+echo_job = &"vanguard"
+level = 5
+encounter_id = &"bell_court"
