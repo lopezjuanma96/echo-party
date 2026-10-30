@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"wand"
+display_name = "Wand"
+attack_kind = 1
+cooldown = 0.38
+attack_range = 430.0
+projectile_speed = 680.0
+projectile_color = Color(0.35, 0.85, 1, 1)

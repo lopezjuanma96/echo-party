@@ -1,6 +1,9 @@
 extends Node2D
 
 
+const ECHO_SCENE := preload("res://src/echo/echo.tscn")
+const FOCUS_MARKER_SCRIPT := preload("res://src/combat/focus_target_marker.gd")
+const FOCUS_CLICK_RADIUS := 96.0
 const DEFAULT_KEY_BINDINGS := {
 	&"move_left": [KEY_A, KEY_LEFT],
 	&"move_right": [KEY_D, KEY_RIGHT],
@@ -9,36 +12,109 @@ const DEFAULT_KEY_BINDINGS := {
 	&"dodge": [KEY_SPACE],
 	&"weapon_slot_1": [KEY_1],
 	&"weapon_slot_2": [KEY_2],
+	&"echo_regroup": [KEY_R],
+	&"echo_hold": [KEY_Q],
 }
 const DEFAULT_MOUSE_BINDINGS := {
 	&"basic_attack": [MOUSE_BUTTON_LEFT],
 	&"weapon_previous": [MOUSE_BUTTON_WHEEL_UP],
 	&"weapon_next": [MOUSE_BUTTON_WHEEL_DOWN],
+	&"echo_focus": [MOUSE_BUTTON_RIGHT],
 }
 
 @onready var player: CharacterBody2D = $Player
 @onready var health_bar: ProgressBar = $HUD/Health/Content/HealthBar
 @onready var health_value: Label = $HUD/Health/Content/HealthValue
 @onready var weapon_value: Label = $HUD/Weapon/Content/WeaponValue
+@onready var weapon_cooldown_value: Label = $HUD/Weapon/Content/WeaponCooldownValue
 @onready var level_value: Label = $HUD/Progression/Content/LevelValue
 @onready var job_value: Label = $HUD/Progression/Content/JobValue
 @onready var experience_value: Label = $HUD/Progression/Content/ExperienceValue
+@onready var run_value: Label = $HUD/RunStatus/Content/RunValue
+@onready var echo_value: Label = $HUD/RunStatus/Content/EchoValue
+@onready var echo_command_value: Label = $HUD/RunStatus/Content/EchoCommandValue
+@onready var echo_intent_value: Label = $HUD/RunStatus/Content/EchoIntentValue
 @onready var choice_modal: Control = $HUD/ChoiceModal
 @onready var choice_title: Label = $HUD/ChoiceModal/Center/Panel/Margin/Content/Title
 @onready var choice_one_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceOne
 @onready var choice_two_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceTwo
 
 var progression := HeroProgression.new()
+var run_number := 1
+var latest_echo_record: HeroRecord
+var echo: EchoActor
+var focus_marker: Node2D
+var _defeat_transition_pending := false
+var _echo_was_defeated := false
 
 
 func _ready() -> void:
 	_setup_default_bindings()
 	_setup_choice_shortcuts()
-	player.apply_job_loadout(progression.get_job_id())
-	player.apply_progression_stats(progression.get_max_health(), progression.get_attack_damage())
+	player.apply_progression(progression, true)
 	_on_player_health_changed(player.health, player.max_health)
 	_on_player_weapon_changed(player.get_selected_weapon_id())
 	_update_progression_hud()
+	_update_run_hud()
+	focus_marker = FOCUS_MARKER_SCRIPT.new() as Node2D
+	focus_marker.visible = false
+	focus_marker.z_index = 5
+	add_child(focus_marker)
+
+
+func _process(_delta: float) -> void:
+	_update_weapon_cooldown_hud()
+	_update_run_hud()
+	if is_instance_valid(echo):
+		focus_marker.set("target", echo.focused_target)
+	else:
+		focus_marker.set("target", null)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"echo_focus"):
+		command_echo_focus_at(player.get_global_mouse_position())
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"echo_regroup") and is_instance_valid(echo):
+		echo.command_regroup()
+		_update_run_hud()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"echo_hold") and is_instance_valid(echo):
+		echo.toggle_hold_position()
+		_update_run_hud()
+		get_viewport().set_input_as_handled()
+
+
+func command_echo_focus_at(world_position: Vector2) -> bool:
+	if not is_instance_valid(echo):
+		return false
+	var best: Node2D
+	var best_distance_squared := FOCUS_CLICK_RADIUS * FOCUS_CLICK_RADIUS
+	var best_order := 9223372036854775807
+	for candidate_node in get_tree().get_nodes_in_group(&"enemies"):
+		var candidate := candidate_node as Node2D
+		if candidate == null or candidate.is_queued_for_deletion():
+			continue
+		var distance_squared := world_position.distance_squared_to(candidate.global_position)
+		var order := int(candidate.get("stable_spawn_order"))
+		if (
+			distance_squared < best_distance_squared
+			or (is_equal_approx(distance_squared, best_distance_squared) and order < best_order)
+			or (
+				is_equal_approx(distance_squared, best_distance_squared)
+				and order == best_order
+				and (best == null or candidate.name.naturalnocasecmp_to(best.name) < 0)
+			)
+		):
+			best = candidate
+			best_distance_squared = distance_squared
+			best_order = order
+	return best != null and echo.command_focus(best)
+
+
+func _update_weapon_cooldown_hud() -> void:
+	var cooldown := float(player.attack_cooldowns.get(player.selected_weapon_id, 0.0))
+	weapon_cooldown_value.text = "Ready" if cooldown <= 0.0 else "Cooldown %.1fs" % cooldown
 
 
 func _setup_default_bindings() -> void:
@@ -72,7 +148,66 @@ func _on_player_health_changed(current_health: float, maximum_health: float) -> 
 
 
 func _on_player_defeated() -> void:
-	player.reset_at(Vector2.ZERO)
+	if _defeat_transition_pending:
+		return
+	_defeat_transition_pending = true
+	choice_modal.hide()
+	get_tree().paused = false
+	call_deferred(&"_start_next_run")
+
+
+func _start_next_run() -> void:
+	choice_modal.hide()
+	get_tree().paused = false
+	latest_echo_record = HeroRecord.capture(
+		"hero-%d" % run_number,
+		"Hero %d" % run_number,
+		progression
+	)
+	_clear_transient_combat()
+	if is_instance_valid(echo):
+		echo.free()
+		echo = null
+
+	run_number += 1
+	progression = HeroProgression.new()
+	_echo_was_defeated = false
+	player.reset_for_new_run(Vector2.ZERO)
+	_spawn_latest_echo()
+	_on_player_health_changed(player.health, player.max_health)
+	_on_player_weapon_changed(player.get_selected_weapon_id())
+	_update_progression_hud()
+	_update_run_hud()
+	_defeat_transition_pending = false
+
+
+func _spawn_latest_echo() -> void:
+	if latest_echo_record == null:
+		return
+	echo = ECHO_SCENE.instantiate() as EchoActor
+	if echo == null:
+		return
+	echo.position = player.position + Vector2(92.0, 0.0)
+	add_child(echo)
+	if not echo.configure(latest_echo_record, player):
+		echo.queue_free()
+		echo = null
+		return
+	echo.defeated.connect(_on_echo_defeated)
+	echo.progression_changed.connect(_update_run_hud)
+
+
+func _on_echo_defeated() -> void:
+	_echo_was_defeated = true
+	if is_instance_valid(echo):
+		echo.queue_free()
+	echo = null
+	_update_run_hud()
+
+
+func _clear_transient_combat() -> void:
+	for transient in get_tree().get_nodes_in_group(HeroActor.TRANSIENT_COMBAT_GROUP):
+		transient.queue_free()
 
 
 func _on_player_weapon_changed(weapon_id: StringName) -> void:
@@ -93,8 +228,13 @@ func _set_button_shortcut(button: Button, keycode: Key) -> void:
 
 
 func _on_enemy_defeated(experience_reward: int) -> void:
+	if _defeat_transition_pending:
+		return
 	progression.grant_experience(experience_reward)
+	if is_instance_valid(echo):
+		echo.grant_shared_experience(experience_reward)
 	_update_progression_hud()
+	_update_run_hud()
 	_show_next_choice_if_needed()
 
 
@@ -162,6 +302,30 @@ func _update_progression_hud() -> void:
 		progression.get_experience_into_level(),
 		HeroProgression.XP_PER_LEVEL,
 	]
+
+
+func _update_run_hud() -> void:
+	run_value.text = "Run %d" % run_number
+	echo_command_value.text = "Command: —"
+	echo_intent_value.text = "Intent: —"
+	if latest_echo_record == null:
+		echo_value.text = "Echo: None"
+		return
+	if _echo_was_defeated:
+		echo_value.text = "Echo: Defeated"
+	elif is_instance_valid(echo):
+		echo_value.text = "Echo: %s · Level %d" % [
+			_job_display_name(echo.job_id),
+			echo.progression.level,
+		]
+		echo_command_value.text = "Command: %s · %d/%d HP" % [
+			String(echo.get_command_status()).capitalize(),
+			echo.health,
+			echo.max_health,
+		]
+		echo_intent_value.text = "Intent: %s" % String(echo.current_intent).capitalize()
+	else:
+		echo_value.text = "Echo: Unavailable"
 
 
 func _job_display_name(job_id: StringName) -> String:

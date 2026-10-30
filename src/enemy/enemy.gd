@@ -21,6 +21,7 @@ var contact_time_left := 0.0
 var contact_target: Node = null
 var random := RandomNumberGenerator.new()
 var simulation_seed := 1
+var stable_spawn_order := 0
 var health := max_health
 var is_defeated := false
 
@@ -28,8 +29,6 @@ var is_defeated := false
 func _ready() -> void:
 	health = max_health
 	random.seed = simulation_seed
-	contact_area.body_entered.connect(_on_contact_area_body_entered)
-	contact_area.body_exited.connect(_on_contact_area_body_exited)
 	_choose_direction()
 
 
@@ -59,6 +58,10 @@ func _choose_direction() -> void:
 
 
 func _damage_contact(delta: float) -> void:
+	var next_target := _choose_contact_target()
+	if next_target == null and next_target != contact_target:
+		contact_time_left = 0.0
+	contact_target = next_target
 	if not is_instance_valid(contact_target):
 		contact_target = null
 		return
@@ -69,15 +72,24 @@ func _damage_contact(delta: float) -> void:
 		contact_time_left = contact_interval
 
 
-func _on_contact_area_body_entered(body: Node2D) -> void:
-	if body.has_method(&"take_damage"):
-		contact_target = body
-		contact_time_left = 0.0
-
-
-func _on_contact_area_body_exited(body: Node2D) -> void:
-	if body == contact_target:
-		contact_target = null
+func _choose_contact_target() -> Node2D:
+	var best: Node2D
+	var best_distance_squared := INF
+	for body_node in contact_area.get_overlapping_bodies():
+		var candidate := body_node as Node2D
+		if candidate == null or not candidate.has_method(&"take_damage"):
+			continue
+		var distance_squared := global_position.distance_squared_to(candidate.global_position)
+		if (
+			distance_squared < best_distance_squared
+			or (
+				is_equal_approx(distance_squared, best_distance_squared)
+				and (best == null or candidate.name.naturalnocasecmp_to(best.name) < 0)
+			)
+		):
+			best = candidate
+			best_distance_squared = distance_squared
+	return best
 
 
 func take_damage(amount: float) -> void:

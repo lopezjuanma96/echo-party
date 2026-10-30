@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"lance"
+display_name = "Lance"
+cooldown = 0.58
+attack_range = 132.0
+arc_degrees = 16.0
