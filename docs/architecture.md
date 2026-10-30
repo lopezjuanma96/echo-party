@@ -20,6 +20,11 @@ For the first-echo slice, `HeroRecord` is the only run-to-run domain object. It
 owns a stable runtime ID, display name, and a deep-copied strict JSON-safe
 progression document. It validates by replaying `HeroProgression`; it is held
 in memory only and does not imply a roster, memorial, or save format.
+`JobCatalog` resolves stable job IDs to display names, ability IDs, tactical
+postures, and capability tags (`provides`). `PartyNeeds` is the pure coverage
+logic over those tags: given job IDs and need tags it returns the covered needs
+with their covering job and the uncovered ones, and builds the Trial annotation
+and report text fragments. It holds no nodes or state.
 
 ### Simulation
 
@@ -28,13 +33,59 @@ and tactical policies. Random decisions receive a seeded random source so bugs
 and balance scenarios can be reproduced.
 
 The current arena's `EnemySpawner` owns target-population replacement, safe
-spawn selection, and per-enemy seeds. `Main` consumes its one-shot XP signal
-but does not own enemy lifecycle or random placement.
+spawn selection, per-enemy seeds, and the level-gated variant table. Variant
+choice draws from a separate seeded type stream, so the position stream does
+not change when types are added. `Main` sets the spawner's `threat_level` from
+the active hero's level and consumes its one-shot XP signal, but does not own
+enemy lifecycle or random placement.
 
-`HeroActor` is the smallest shared combat contract for active heroes and
-echoes: health, progression-derived stats, stable weapon loadouts, cooldowns,
-aiming, and melee/projectile execution. Player code adds direct input,
-movement, and dodge behavior. Echo code adds the deterministic tactical policy
+Enemy variants extend `EnemyActor`. `EnemyCatalog` maps stable enemy IDs to
+scenes. `EnemyTargeting` provides deterministic friendly-target queries over
+the `friendly_actors` group, breaking ties by node name. Enemies report damage
+dealt through `dealt_damage(enemy_id, target, applied)` for later encounter
+reporting. Hero attacks pass an `interrupts` flag with damage, and staff
+splash is applied by the bolt. `EnemyActor.is_casting()` lets targeting code ask
+whether an enemy is interruptible without knowing its type; the Hexcaller
+overrides it. The Slinger's dart is a separate `EnemyShot` that only hurts
+friendlies and walls, reporting hits back through the Slinger's
+`dealt_damage`; enemy fire never reuses `Bolt`.
+
+`EncounterCatalog` holds static encounter data keyed by stable ID (needs,
+trigger level, warning time, wave timeline, seed). `EncounterDirector` runs one
+encounter through `IDLE → WARNING → ACTIVE → CLEARED` and is a sibling of
+`Enemies`, not a child. Ownership is split deliberately:
+
+- the director owns the enemies it spawns, as its own children, with
+  `stable_spawn_order` starting at 1_000_001, so the spawner's child-count
+  population is untouched;
+- the spawner owns open-arena population, and the director only pauses it
+  (`set_population(0)`) for the encounter and restores the prior target after;
+- the director draws pack jitter and enemy seeds from its own seeded
+  `RandomNumberGenerator`, reseeded at each start;
+- its counters come from signals and state, not from the HUD: casts from the
+  Hexcaller's `cast_resolved` and `cast_interrupted`, damage per enemy ID from
+  `dealt_damage` (hero or echo by target type), and healing from per-actor
+  `total_healing_done` deltas; and
+- it re-emits `enemy_defeated` so `Main` routes court XP through the same
+  handler as arena kills, and emits `report_ready(report)` with a plain-data
+  report when an encounter is cleared or failed. `reset_for_new_run()` fails a
+  running encounter, frees its enemies, restores spawning, and re-arms.
+
+`Main` asks the director to trigger, supplies the party's job IDs, and renders
+the Trial panel, banner, level-3 modal annotations, and report from director
+state and `report_ready`.
+
+Scenario scenes under `tests/scenarios/` are deterministic playtest fixtures.
+They set up jobs, levels, starting health, enemy population, and debug enemy
+spawns, and they register a scenario-only frame-capture action. They are not
+part of the shipped game flow.
+
+`AbilityCatalog` resolves stable ability IDs to `AbilityDefinition` resources;
+Mend is the first immediate ability. `HeroActor` is the smallest shared combat
+contract for active heroes and echoes: health, progression-derived stats,
+stable weapon loadouts, attack and ability cooldowns, heal targeting, aiming,
+and melee/projectile execution. Player code adds direct input, movement, and
+dodge behavior. Echo code adds the deterministic tactical policy
 (follow, leash-bounded target selection with stable spawn-order ties,
 range-aware weapon choice, approach/retreat, and exposed intent). It reuses the
 same attack semantics rather than implementing parallel weapon behavior.
@@ -57,6 +108,11 @@ data.
 `Main` currently coordinates the in-memory defeat transition, newest-echo-only
 replacement, shared XP routing from `EnemySpawner`, and concise run/echo HUD.
 This is temporary run orchestration, not persistence or roster resolution.
+
+The echo's `StatusOverlay` and the HUD only read echo state (`get_display_intent`,
+`get_intent_summary`, cooldown fractions). The 0.25 s display dwell lives in
+`EchoActor` so tests and tooling see the same intent as the player; the raw
+`current_intent` stays unchanged for simulation and tests.
 
 ### Persistence
 

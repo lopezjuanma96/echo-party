@@ -49,12 +49,11 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 
-	if (
-		not suppress_combat_input
-		and Input.is_action_just_pressed(&"basic_attack")
-		and dodge_time_left <= 0.0
-	):
-		attack_selected_weapon()
+	if not suppress_combat_input and dodge_time_left <= 0.0:
+		if Input.is_action_just_pressed(&"basic_attack"):
+			attack_selected_weapon()
+		if Input.is_action_just_pressed(&"ability_1"):
+			use_ability()
 
 
 func _start_dodge(input_direction: Vector2) -> void:
@@ -86,6 +85,7 @@ func suppress_combat_input_until_released() -> void:
 func _is_combat_input_pressed() -> bool:
 	return (
 		Input.is_action_pressed(&"basic_attack")
+		or Input.is_action_pressed(&"ability_1")
 		or Input.is_action_pressed(&"weapon_slot_1")
 		or Input.is_action_pressed(&"weapon_slot_2")
 		or Input.is_action_pressed(&"weapon_previous")
@@ -102,10 +102,13 @@ func take_damage(amount: float) -> void:
 func reset_for_new_run(spawn_position: Vector2) -> void:
 	max_health = HeroProgression.BASE_MAX_HEALTH
 	attack_damage = HeroProgression.BASE_ATTACK_DAMAGE
+	job_id = HeroProgression.JOB_NOVICE
 	weapon_loadout = WeaponCatalog.get_loadout(HeroProgression.JOB_NOVICE)
 	selected_weapon_id = weapon_loadout[0]
 	attack_cooldowns.clear()
 	attack_cooldowns[selected_weapon_id] = 0.0
+	ability_id = &""
+	ability_cooldown_left = 0.0
 	facing = Vector2.DOWN
 	dodge_direction = Vector2.ZERO
 	dodge_time_left = 0.0
@@ -114,3 +117,22 @@ func reset_for_new_run(spawn_position: Vector2) -> void:
 	set_aim_direction(Vector2.RIGHT)
 	reset_actor(spawn_position, true)
 	weapon_changed.emit(selected_weapon_id)
+
+
+func _mcp_state() -> Dictionary:
+	return {
+		"pos_x": global_position.x,
+		"pos_y": global_position.y,
+		"health": health,
+		"max_health": max_health,
+		"job_id": String(job_id),
+		"weapon_id": String(selected_weapon_id),
+		"weapon_loadout": Array(weapon_loadout).map(func(id: StringName) -> String: return String(id)),
+		"weapon_cooldown_left": float(attack_cooldowns.get(selected_weapon_id, 0.0)),
+		"ability_id": String(ability_id),
+		"ability_cooldown_left": ability_cooldown_left,
+		"total_healing_done": total_healing_done,
+		"dodge_time_left": dodge_time_left,
+		"dodge_cooldown_left": dodge_cooldown_left,
+		"is_defeated": is_defeated,
+	}

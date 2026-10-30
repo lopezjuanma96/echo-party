@@ -1,9 +1,10 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://src/main/arena.gd" id="2_arena"]
 [ext_resource type="Script" path="res://src/player/player.gd" id="3_player"]
 [ext_resource type="Script" path="res://src/enemy/enemy_spawner.gd" id="4_spawner"]
+[ext_resource type="Script" path="res://src/encounter/encounter_director.gd" id="5_director"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_top"]
 size = Vector2(1824, 24)
@@ -26,6 +27,18 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_banner"]
+bg_color = Color(0.035, 0.047, 0.071, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.82, 0.25, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_health_background"]
 bg_color = Color(0.12, 0.14, 0.18, 1)
 corner_radius_top_left = 4
@@ -39,6 +52,13 @@ corner_radius_top_left = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cooldown_fill"]
+bg_color = Color(0.96, 0.64, 0.35, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -64,7 +84,7 @@ shape = SubResource("RectangleShape2D_side")
 position = Vector2(912, 0)
 shape = SubResource("RectangleShape2D_side")
 
-[node name="Player" type="CharacterBody2D" parent="."]
+[node name="Player" type="CharacterBody2D" parent="." groups=["friendly_actors"]]
 collision_layer = 2
 collision_mask = 1
 script = ExtResource("3_player")
@@ -97,13 +117,16 @@ position_smoothing_speed = 10.0
 [node name="Enemies" type="Node2D" parent="."]
 script = ExtResource("4_spawner")
 
+[node name="EncounterDirector" type="Node2D" parent="."]
+script = ExtResource("5_director")
+
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Instructions" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 390.0
-offset_bottom = 221.0
+offset_right = 423.0
+offset_bottom = 247.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Margin" type="MarginContainer" parent="HUD/Instructions"]
@@ -117,7 +140,7 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
 theme_override_font_sizes/font_size = 16
-text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\n1 / 2 or Mouse Wheel  |  Select available weapon\nRight Click  |  Focus enemy\nR  |  Regroup echo\nQ  |  Toggle echo hold / follow"
+text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\nE  |  Job ability\n1 / 2 or Mouse Wheel  |  Select available weapon\nRight Click  |  Focus enemy\nR  |  Regroup echo\nQ  |  Toggle echo hold / follow"
 
 [node name="Health" type="PanelContainer" parent="HUD"]
 anchors_preset = 1
@@ -163,7 +186,7 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -110.0
-offset_top = -106.0
+offset_top = -150.0
 offset_right = 110.0
 offset_bottom = -20.0
 grow_horizontal = 2
@@ -194,11 +217,36 @@ theme_override_font_sizes/font_size = 13
 text = "Ready"
 horizontal_alignment = 1
 
+[node name="WeaponCooldownBar" type="ProgressBar" parent="HUD/Weapon/Content"]
+custom_minimum_size = Vector2(200, 8)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/background = SubResource("StyleBoxFlat_health_background")
+theme_override_styles/fill = SubResource("StyleBoxFlat_cooldown_fill")
+max_value = 1.0
+value = 1.0
+show_percentage = false
+
+[node name="AbilityValue" type="Label" parent="HUD/Weapon/Content"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.36, 0.85, 0.54, 1)
+theme_override_font_sizes/font_size = 13
+text = "[E] Mend — Ready"
+horizontal_alignment = 1
+
+[node name="DodgeValue" type="Label" parent="HUD/Weapon/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+text = "[Space] Dodge — Ready"
+horizontal_alignment = 1
+
 [node name="Progression" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 335.0
+offset_top = 376.0
 offset_right = 212.0
-offset_bottom = 433.0
+offset_bottom = 474.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/Progression"]
@@ -228,9 +276,9 @@ horizontal_alignment = 1
 
 [node name="RunStatus" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 233.0
-offset_right = 320.0
-offset_bottom = 323.0
+offset_top = 259.0
+offset_right = 423.0
+offset_bottom = 364.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/RunStatus"]
@@ -264,6 +312,134 @@ theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
 theme_override_font_sizes/font_size = 13
 text = "Intent: —"
 horizontal_alignment = 1
+
+[node name="EchoCooldownsValue" type="Label" parent="HUD/RunStatus/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Cooldowns: —"
+horizontal_alignment = 1
+
+[node name="Trial" type="PanelContainer" parent="HUD"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 20.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="HUD/Trial"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="Content" type="VBoxContainer" parent="HUD/Trial/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="HUD/Trial/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.25, 1)
+theme_override_font_sizes/font_size = 16
+text = "TRIAL · Bell Court · Lv 5"
+horizontal_alignment = 1
+
+[node name="Chips" type="HBoxContainer" parent="HUD/Trial/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Status" type="Label" parent="HUD/Trial/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.78, 1)
+theme_override_font_sizes/font_size = 12
+text = "Reach Lv 5 to face the Court"
+horizontal_alignment = 1
+
+[node name="TrialBanner" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 152.0
+offset_right = 200.0
+offset_bottom = 152.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_banner")
+
+[node name="Margin" type="MarginContainer" parent="HUD/TrialBanner"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="Content" type="VBoxContainer" parent="HUD/TrialBanner/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="HUD/TrialBanner/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.25, 1)
+theme_override_font_sizes/font_size = 24
+text = "THE BELL COURT"
+horizontal_alignment = 1
+
+[node name="Needs" type="Label" parent="HUD/TrialBanner/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 15
+text = "Needs: Interrupt · Area · Sustain"
+horizontal_alignment = 1
+
+[node name="Countdown" type="Label" parent="HUD/TrialBanner/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.78, 1)
+theme_override_font_sizes/font_size = 14
+text = "Begins in 3.0 s"
+horizontal_alignment = 1
+
+[node name="TrialReport" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -340.0
+offset_top = 116.0
+offset_right = -20.0
+offset_bottom = 116.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="HUD/TrialReport"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="Content" type="VBoxContainer" parent="HUD/TrialReport/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="HUD/TrialReport/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.25, 1)
+theme_override_font_sizes/font_size = 15
+text = "TRIAL REPORT"
+horizontal_alignment = 1
+
+[node name="Body" type="Label" parent="HUD/TrialReport/Margin/Content"]
+custom_minimum_size = Vector2(296, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
 
 [node name="ChoiceModal" type="Control" parent="HUD"]
 process_mode = 3
@@ -338,9 +514,21 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 17
 text = "[2] VITALITY\n+20 max health and current health"
 
+[node name="ChoiceThree" type="Button" parent="HUD/ChoiceModal/Center/Panel/Margin/Content"]
+visible = false
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 17
+text = "[3] MENDER\nMace and Sling — Mend a wounded ally"
+
 [connection signal="defeated" from="Player" to="." method="_on_player_defeated"]
 [connection signal="health_changed" from="Player" to="." method="_on_player_health_changed"]
 [connection signal="weapon_changed" from="Player" to="." method="_on_player_weapon_changed"]
+[connection signal="ability_feedback" from="Player" to="." method="_on_player_ability_feedback"]
 [connection signal="enemy_defeated" from="Enemies" to="." method="_on_enemy_defeated"]
+[connection signal="enemy_defeated" from="EncounterDirector" to="." method="_on_enemy_defeated"]
+[connection signal="report_ready" from="EncounterDirector" to="." method="_on_trial_report_ready"]
 [connection signal="pressed" from="HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceOne" to="." method="_on_choice_one_pressed"]
 [connection signal="pressed" from="HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceTwo" to="." method="_on_choice_two_pressed"]
+[connection signal="pressed" from="HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceThree" to="." method="_on_choice_three_pressed"]

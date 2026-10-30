@@ -146,6 +146,13 @@ func _test_job_loadouts_and_selection() -> void:
 	_expect(player.apply_job_loadout(HeroProgressionScript.JOB_ARCANIST), "Arcanist loadout applies")
 	_expect(player.get_weapon_loadout() == [&"wand", &"staff"], "Arcanist has Wand and Staff")
 	_expect(player.cycle_weapon(1) and player.get_selected_weapon_id() == &"staff", "wheel-style cycling uses available weapons")
+	_expect(player.apply_job_loadout(HeroProgressionScript.JOB_MENDER), "Mender loadout applies")
+	_expect(
+		player.get_weapon_loadout() == [&"mace", &"sling"]
+		and player.get_selected_weapon_id() == &"mace"
+		and player.ability_id == &"mend",
+		"Mender has Mace, Sling, and Mend"
+	)
 	player.free()
 
 
@@ -155,22 +162,27 @@ func _test_weapon_properties() -> void:
 	var lance := WeaponCatalog.get_weapon(&"lance")
 	var wand := WeaponCatalog.get_weapon(&"wand")
 	var staff := WeaponCatalog.get_weapon(&"staff")
+	var mace := WeaponCatalog.get_weapon(&"mace")
+	var sling := WeaponCatalog.get_weapon(&"sling")
 	for job_id: StringName in WeaponCatalog.LOADOUTS:
 		for weapon_id: StringName in WeaponCatalog.get_loadout(job_id):
 			_expect(WeaponCatalog.get_weapon(weapon_id) != null, "%s loadout weapon resolves" % job_id)
 	_expect(knife.attack_range < sword.attack_range and knife.cooldown < sword.cooldown, "Knife is shorter and quicker than Sword")
 	_expect(lance.attack_range > sword.attack_range and lance.arc_degrees < sword.arc_degrees, "Lance is longer and narrower than Sword")
 	_expect(wand.attack_range < staff.attack_range and wand.cooldown < staff.cooldown, "Wand is shorter and quicker than Staff")
+	_expect(mace.cooldown == 0.5 and sling.cooldown == 0.5, "Mace and Sling use their defined cooldowns")
 	_expect(
 		knife.attack_kind == WeaponDefinition.AttackKind.MELEE
 		and sword.attack_kind == WeaponDefinition.AttackKind.MELEE
-		and lance.attack_kind == WeaponDefinition.AttackKind.MELEE,
-		"Knife, Sword, and Lance use melee attacks"
+		and lance.attack_kind == WeaponDefinition.AttackKind.MELEE
+		and mace.attack_kind == WeaponDefinition.AttackKind.MELEE,
+		"Knife, Sword, Lance, and Mace use melee attacks"
 	)
 	_expect(
 		wand.attack_kind == WeaponDefinition.AttackKind.PROJECTILE
-		and staff.attack_kind == WeaponDefinition.AttackKind.PROJECTILE,
-		"Wand and Staff use projectile attacks"
+		and staff.attack_kind == WeaponDefinition.AttackKind.PROJECTILE
+		and sling.attack_kind == WeaponDefinition.AttackKind.PROJECTILE,
+		"Wand, Staff, and Sling use projectile attacks"
 	)
 
 

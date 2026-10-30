@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+; Four explicit debug entries, not one 40 px spawn pack.
+[node name="ArcanistVanguard4Skitters" type="Node"]
+script = ExtResource("1_launcher")
+player_job = &"arcanist"
+echo_job = &"vanguard"
+level = 4
+enemy_population = 0
+debug_enemies = Array[StringName]([&"skitter", &"skitter", &"skitter", &"skitter"])
