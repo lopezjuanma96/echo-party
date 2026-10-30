@@ -1,0 +1,18 @@
+[mcp_servers.godot]
+command = "npx"
+args = ["-y", "@satelliteoflove/godot-mcp@4.1.11"]
+enabled = true
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+default_tools_approval_mode = "auto"
+enabled_tools = [
+  "godot_project",
+  "godot_node_read",
+  "godot_editor_read",
+  "godot_editor_edit",
+  "godot_input",
+  "godot_runtime_state",
+  "godot_game_time",
+]
+disabled_tools = ["godot_exec"]
+env = { GODOT_MCP_USAGE_LOG = "false" }
