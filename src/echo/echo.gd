@@ -15,6 +15,9 @@ var progression := HeroProgression.new()
 var job_id := HeroProgression.JOB_NOVICE
 var current_target: Node2D
 var current_intent := &"idle"
+var focused_target: Node2D
+var is_regrouping := false
+var is_holding_position := false
 var _recorded_choices: Array[Dictionary] = []
 var _replay_level_limit := 1
 
@@ -73,27 +76,99 @@ func get_replay_level_limit() -> int:
 	return _replay_level_limit
 
 
+func command_focus(target: Node2D) -> bool:
+	if not _is_valid_focus_target(target):
+		return false
+	focused_target = target
+	is_regrouping = false
+	return true
+
+
+func command_regroup() -> void:
+	focused_target = null
+	current_target = null
+	is_holding_position = false
+	is_regrouping = true
+	current_intent = &"regroup"
+
+
+func toggle_hold_position() -> bool:
+	is_holding_position = not is_holding_position
+	is_regrouping = false
+	current_intent = &"hold" if is_holding_position else &"idle"
+	return is_holding_position
+
+
+func get_command_status() -> StringName:
+	if is_regrouping:
+		return &"regroup"
+	if is_holding_position:
+		return &"hold"
+	if _is_valid_focus_target(focused_target):
+		return &"focus"
+	return &"follow"
+
+
+func _is_valid_focus_target(target: Node2D) -> bool:
+	return (
+		is_instance_valid(target)
+		and not target.is_queued_for_deletion()
+		and target.is_in_group(&"enemies")
+		and is_instance_valid(active_hero)
+		and target.global_position.distance_to(active_hero.global_position) <= target_leash
+	)
+
+
 func _update_label() -> void:
 	var label := get_node_or_null("EchoLabel") as Label
 	if label != null:
-		label.text = "ECHO · %s · Lv %d" % [
+		label.text = "ECHO · %s · Lv %d\n%d / %d HP · %s" % [
 			hero_record.display_name,
 			progression.level,
+			health,
+			max_health,
+			String(get_command_status()).to_upper(),
 		]
 
 
 func _physics_process(delta: float) -> void:
 	tick_combat(delta)
-	current_target = choose_target(get_tree().get_nodes_in_group(&"enemies"))
 	velocity = Vector2.ZERO
-	if current_target == null:
-		_follow_active_hero()
+	if is_regrouping:
+		current_target = null
+		_regroup_with_active_hero()
 	else:
-		_fight_target()
+		if focused_target != null and not _is_valid_focus_target(focused_target):
+			focused_target = null
+		current_target = choose_target(get_tree().get_nodes_in_group(&"enemies"))
+		if current_target == null:
+			if is_holding_position:
+				current_intent = &"hold"
+			else:
+				_follow_active_hero()
+		else:
+			_fight_target()
 	move_and_slide()
+	_update_label()
+
+
+func _regroup_with_active_hero() -> void:
+	current_intent = &"regroup"
+	if not is_instance_valid(active_hero):
+		is_regrouping = false
+		return
+	var to_hero := active_hero.global_position - global_position
+	if to_hero.length() <= follow_distance * 0.8:
+		is_regrouping = false
+		current_intent = &"idle"
+		return
+	velocity = to_hero.normalized() * move_speed
 
 
 func choose_target(candidates: Array[Node]) -> Node2D:
+	if _is_valid_focus_target(focused_target):
+		return focused_target
+	focused_target = null
 	if not is_instance_valid(active_hero):
 		return null
 	var best: Node2D
@@ -155,6 +230,12 @@ func _fight_target() -> void:
 	var weapon := WeaponCatalog.get_weapon(weapon_id)
 	if weapon == null:
 		current_intent = &"idle"
+		return
+	if is_holding_position:
+		current_intent = &"hold"
+		if distance <= weapon.attack_range:
+			current_intent = &"attack" if can_attack() else &"hold"
+			attack_selected_weapon()
 		return
 	if job_id == HeroProgression.JOB_ARCANIST and distance < ranged_retreat_distance:
 		current_intent = &"retreat"

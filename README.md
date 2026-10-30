@@ -60,6 +60,9 @@ godot --headless --path . --script res://tests/test_echo.gd
 - Aim: mouse pointer
 - Basic attack: left mouse button
 - Select available weapon slot: `1` / `2` or mouse wheel
+- Focus an enemy for the echo: right mouse button near that enemy
+- Regroup the echo and clear focus/hold: `R`
+- Toggle echo hold-position/follow stance: `Q`
 - Choose an attribute or job while leveling: `1` / `2` or the modal buttons
 
 The controls use named Godot input actions so they can be exposed through a
@@ -78,9 +81,13 @@ it automatically replays the fallen hero's recorded attribute and job choices
 in order. It stops at the highest fully recorded level until history extension
 is implemented. There is no disk persistence, roster, or memorial yet. The echo
 follows the active hero and deterministically selects nearby enemies and
-range-appropriate weapons. Enemy contact can defeat the echo; a defeated echo
-stays absent for the rest of that run and only returns if a later active hero
-is recorded as the new echo.
+range-appropriate weapons. Right-clicking a nearby enemy overrides target
+selection with a marked focus target. Hold stance attacks without moving;
+regroup clears focus and hold until the echo returns to the active hero. The
+HUD shows the current command, tactical intent, and echo health, and the world
+label mirrors command and health state. Enemy contact can defeat the echo; a
+defeated echo stays absent for the rest of that run and only returns if a later
+active hero is recorded as the new echo.
 
 The Novice has only a short, quick Knife arc, so slot 2 does nothing. At level
 3, Vanguard immediately equips Sword and Lance (a medium wide arc and a long

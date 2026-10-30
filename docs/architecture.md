@@ -42,7 +42,11 @@ Each echo owns fresh runtime `HeroProgression`, receives the same XP reward as
 the active hero, and applies the corresponding ordered choice from its
 `HeroRecord` when it reaches that level. The record remains immutable; runtime
 progression stops at its highest fully recorded level until history extension
-is implemented.
+is implemented. Echo command state is run-local and independent of the record:
+focus overrides nearest-target selection while valid, hold suppresses tactical
+movement without suppressing attacks, and regroup clears both until the echo
+reaches the active hero. `Main` translates named input actions into these
+commands and presents their state; presentation does not alter build history.
 
 ### Presentation
 

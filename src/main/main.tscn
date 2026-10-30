@@ -102,8 +102,8 @@ script = ExtResource("4_spawner")
 [node name="Instructions" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 354.0
-offset_bottom = 86.0
+offset_right = 390.0
+offset_bottom = 174.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Margin" type="MarginContainer" parent="HUD/Instructions"]
@@ -117,7 +117,7 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
 theme_override_font_sizes/font_size = 16
-text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\n1 / 2 or Mouse Wheel  |  Select available weapon"
+text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\n1 / 2 or Mouse Wheel  |  Select available weapon\nRight Click  |  Focus enemy\nR  |  Regroup echo\nQ  |  Toggle echo hold / follow"
 
 [node name="Health" type="PanelContainer" parent="HUD"]
 anchors_preset = 1
@@ -163,7 +163,7 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -110.0
-offset_top = -82.0
+offset_top = -106.0
 offset_right = 110.0
 offset_bottom = -20.0
 grow_horizontal = 2
@@ -187,11 +187,18 @@ theme_override_font_sizes/font_size = 18
 text = "Knife"
 horizontal_alignment = 1
 
+[node name="WeaponCooldownValue" type="Label" parent="HUD/Weapon/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Ready"
+horizontal_alignment = 1
+
 [node name="Progression" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 156.0
+offset_top = 288.0
 offset_right = 212.0
-offset_bottom = 254.0
+offset_bottom = 386.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/Progression"]
@@ -221,9 +228,9 @@ horizontal_alignment = 1
 
 [node name="RunStatus" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 98.0
-offset_right = 286.0
-offset_bottom = 146.0
+offset_top = 186.0
+offset_right = 320.0
+offset_bottom = 276.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/RunStatus"]
@@ -242,6 +249,20 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
 theme_override_font_sizes/font_size = 13
 text = "Echo: None"
+horizontal_alignment = 1
+
+[node name="EchoCommandValue" type="Label" parent="HUD/RunStatus/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Command: —"
+horizontal_alignment = 1
+
+[node name="EchoIntentValue" type="Label" parent="HUD/RunStatus/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Intent: —"
 horizontal_alignment = 1
 
 [node name="ChoiceModal" type="Control" parent="HUD"]

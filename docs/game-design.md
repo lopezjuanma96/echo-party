@@ -86,6 +86,17 @@ Echoes have health and can take enemy contact damage. A defeated echo is absent
 for the remainder of that run and returns only when a later fallen active hero
 creates the newest record.
 
+### Echo Commands
+
+The current party-command slice adds three deterministic overrides. Right-click
+an enemy to focus it; the purple target ring identifies the selected enemy, and
+the focus ends when that enemy dies, leaves the active hero's leash, or regroup
+is ordered. `Q` toggles a hold-position stance: the echo keeps its target and
+attacks enemies in weapon range but does not approach or retreat. `R` clears
+focus and hold, then moves the echo back to the active hero before normal
+tactical behavior resumes. The HUD exposes the current command, tactical
+intent, and echo health so these overrides remain inspectable.
+
 ## Death And Roster Resolution
 
 The active hero becomes a candidate echo after a run. If the party has room,

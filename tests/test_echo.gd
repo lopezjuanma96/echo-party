@@ -19,11 +19,12 @@ func _run_tests() -> void:
 	_test_echo_replays_history_by_level()
 	_test_multi_level_replay_and_incomplete_history()
 	_test_deterministic_target_and_weapon_selection()
+	_test_echo_commands()
 	_test_new_run_reset()
 	_test_run_transition_clears_stale_choice()
 
 	if _failures.is_empty():
-		print("Hero record, echo, and run reset tests passed (7 cases).")
+		print("Hero record, echo, and run reset tests passed (8 cases).")
 		quit(0)
 	else:
 		for failure in _failures:
@@ -168,6 +169,68 @@ func _test_deterministic_target_and_weapon_selection() -> void:
 	active.free()
 
 
+func _test_echo_commands() -> void:
+	var active := Node2D.new()
+	root.add_child(active)
+	var echo := EchoScene.instantiate() as EchoActor
+	root.add_child(echo)
+	echo.configure(HeroRecord.capture("hero-6", "Hero 6", _arcanist_progression()), active)
+	echo.grant_shared_experience(200)
+	var nearest := EnemyScene.instantiate()
+	nearest.stable_spawn_order = 1
+	nearest.position = Vector2(-100.0, 0.0)
+	root.add_child(nearest)
+	var focused := EnemyScene.instantiate()
+	focused.stable_spawn_order = 2
+	focused.position = Vector2(300.0, 0.0)
+	root.add_child(focused)
+	var candidates: Array[Node] = [nearest, focused]
+	_expect(echo.command_focus(focused), "focus command accepts a live enemy inside the leash")
+	_expect(
+		echo.choose_target(candidates) == focused
+		and echo.get_command_status() == &"focus",
+		"focused target overrides nearest-target selection"
+	)
+	_expect(echo.toggle_hold_position() and echo.is_holding_position, "hold stance can be enabled")
+	echo.attack_cooldowns[&"wand"] = 1.0
+	echo.attack_cooldowns[&"staff"] = 1.0
+	echo.current_target = focused
+	echo._fight_target()
+	_expect(
+		echo.velocity == Vector2.ZERO and echo.current_intent in [&"hold", &"attack"],
+		"hold stance attacks without approach or retreat movement"
+	)
+	echo.command_regroup()
+	_expect(
+		echo.focused_target == null
+		and not echo.is_holding_position
+		and echo.is_regrouping,
+		"regroup clears focus and hold stance"
+	)
+	echo.position = Vector2(300.0, 0.0)
+	echo._physics_process(0.0)
+	_expect(
+		echo.current_intent == &"regroup" and echo.velocity.x < 0.0,
+		"regroup moves toward the active hero instead of fighting"
+	)
+	echo.position = Vector2(10.0, 0.0)
+	echo._physics_process(0.0)
+	_expect(not echo.is_regrouping, "regroup completes after reaching the active hero")
+	echo.toggle_hold_position()
+	echo.position = Vector2(300.0, 0.0)
+	nearest.position = Vector2(2000.0, 0.0)
+	focused.position = Vector2(2000.0, 0.0)
+	echo._physics_process(0.0)
+	_expect(
+		echo.velocity == Vector2.ZERO and echo.current_intent == &"hold",
+		"hold stance stays in place when no target is available"
+	)
+	echo.free()
+	nearest.free()
+	focused.free()
+	active.free()
+
+
 func _test_new_run_reset() -> void:
 	var player = PlayerScript.new()
 	player.max_health = 160.0
@@ -226,6 +289,25 @@ func _test_run_transition_clears_stale_choice() -> void:
 		main.echo.progression.level == 1
 		and main.echo.job_id == HeroProgression.JOB_NOVICE,
 		"new echo starts its recorded history from level 1"
+	)
+	var focus_target := main.get_node("Enemies").get_child(0) as Node2D
+	focus_target.position = Vector2(320.0, 0.0)
+	_expect(
+		main.command_echo_focus_at(focus_target.global_position)
+		and main.echo.focused_target == focus_target,
+		"mouse-world focus command selects the intended arena enemy"
+	)
+	main._process(0.0)
+	_expect(
+		main.focus_marker.get("target") == focus_target
+		and main.echo_command_value.text.begins_with("Command: Focus"),
+		"focus command updates its target marker and HUD status"
+	)
+	main.echo.command_regroup()
+	main._update_run_hud()
+	_expect(
+		main.echo_command_value.text.begins_with("Command: Regroup"),
+		"regroup command is visible in the HUD"
 	)
 	main._defeat_transition_pending = false
 	main._on_enemy_defeated(50)
