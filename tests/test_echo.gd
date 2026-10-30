@@ -22,9 +22,10 @@ func _run_tests() -> void:
 	_test_echo_commands()
 	_test_new_run_reset()
 	_test_run_transition_clears_stale_choice()
+	_test_hud_panels_do_not_overlap()
 
 	if _failures.is_empty():
-		print("Hero record, echo, and run reset tests passed (8 cases).")
+		print("Hero record, echo, and run reset tests passed (9 cases).")
 		quit(0)
 	else:
 		for failure in _failures:
@@ -324,6 +325,28 @@ func _test_run_transition_clears_stale_choice() -> void:
 	_expect(main.echo_value.text == "Echo: Defeated", "echo defeat status persists for the run")
 	main.free()
 	paused = false
+
+
+func _test_hud_panels_do_not_overlap() -> void:
+	root.size = Vector2i(1280, 720)
+	var main := MainScene.instantiate()
+	root.add_child(main)
+	var instructions := main.get_node("HUD/Instructions") as Control
+	var run_status := main.get_node("HUD/RunStatus") as Control
+	var progression := main.get_node("HUD/Progression") as Control
+	_expect(
+		instructions.get_rect().end.y + 12.0 <= run_status.get_rect().position.y,
+		"controls and run/echo panels retain vertical separation"
+	)
+	_expect(
+		run_status.get_rect().end.y + 12.0 <= progression.get_rect().position.y,
+		"run/echo and progression panels retain vertical separation"
+	)
+	_expect(
+		progression.get_rect().end.y <= root.size.y,
+		"left-hand HUD panels fit inside the viewport"
+	)
+	main.free()
 
 
 func _arcanist_progression() -> HeroProgression:

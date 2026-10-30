@@ -103,7 +103,7 @@ script = ExtResource("4_spawner")
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 390.0
-offset_bottom = 174.0
+offset_bottom = 221.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Margin" type="MarginContainer" parent="HUD/Instructions"]
@@ -196,9 +196,9 @@ horizontal_alignment = 1
 
 [node name="Progression" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 288.0
+offset_top = 335.0
 offset_right = 212.0
-offset_bottom = 386.0
+offset_bottom = 433.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/Progression"]
@@ -228,9 +228,9 @@ horizontal_alignment = 1
 
 [node name="RunStatus" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 186.0
+offset_top = 233.0
 offset_right = 320.0
-offset_bottom = 276.0
+offset_bottom = 323.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/RunStatus"]
