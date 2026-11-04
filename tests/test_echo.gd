@@ -98,10 +98,12 @@ func _test_echo_replays_history_by_level() -> void:
 		"echo replays its recorded level-3 job choice"
 	)
 	_expect(
-		echo.grant_shared_experience(100) == 0
-		and echo.progression.level == 3
-		and echo.progression.experience == 200,
-		"echo stops at its highest fully recorded level"
+		echo.grant_shared_experience(100) == 1
+		and echo.progression.level == 4
+		and echo.progression.experience == 300
+		and echo.get_pending_extension_levels() == [4]
+		and echo.get_record_level() == 3,
+		"XP past the recorded level is kept and leaves an extension choice pending"
 	)
 	echo.free()
 	active.free()
@@ -119,11 +121,11 @@ func _test_multi_level_replay_and_incomplete_history() -> void:
 	echo.configure(HeroRecord.capture("hero-4", "Hero 4", progression), active)
 	_expect(
 		echo.grant_shared_experience(250) == 2
-		and echo.progression.experience == 200
+		and echo.progression.experience == 250
 		and echo.attack_damage == 30.0
 		and echo.job_id == HeroProgression.JOB_VANGUARD
 		and echo.get_weapon_loadout() == [&"sword", &"lance"],
-		"one large grant replays Might and Vanguard before clamping to recorded level"
+		"one large grant replays Might and Vanguard and stops at the recorded level"
 	)
 	var incomplete_progression := HeroProgression.new()
 	incomplete_progression.grant_experience(100)
@@ -135,9 +137,10 @@ func _test_multi_level_replay_and_incomplete_history() -> void:
 	)
 	_expect(
 		incomplete_echo.get_replay_level_limit() == 1
-		and incomplete_echo.grant_shared_experience(100) == 0
-		and incomplete_echo.progression.level == 1,
-		"incomplete history stops before its unresolved level"
+		and incomplete_echo.grant_shared_experience(100) == 1
+		and incomplete_echo.progression.level == 2
+		and incomplete_echo.get_pending_extension_levels() == [2],
+		"incomplete history replays nothing and leaves its unresolved level to the player"
 	)
 	echo.free()
 	incomplete_echo.free()
@@ -289,7 +292,12 @@ func _test_run_transition_clears_stale_choice() -> void:
 	main._on_enemy_defeated(50)
 	_expect(main.progression.experience == 200, "old-run rewards are ignored during defeat transition")
 	main._start_next_run()
-	_expect(not paused and not main.choice_modal.visible, "new run clears stale modal pause state")
+	_expect(
+		paused and not main.choice_modal.visible and main.resolution_screen.visible,
+		"a job-holding death opens the paused roster screen and clears the stale choice modal"
+	)
+	_expect(main.resolve_default(), "the default placement resolves the open screen")
+	_expect(not paused and not main.choice_modal.visible, "starting the run clears stale modal pause state")
 	_expect(
 		main.run_number == 2
 		and main.progression.level == 1
@@ -310,7 +318,7 @@ func _test_run_transition_clears_stale_choice() -> void:
 	var focus_target := main.get_node("Enemies").get_child(0) as Node2D
 	focus_target.position = Vector2(320.0, 0.0)
 	_expect(
-		main.command_echo_focus_at(focus_target.global_position)
+		main.command_echo_focus_at(focus_target.global_position) == 1
 		and main.echo.focused_target == focus_target,
 		"mouse-world focus command selects the intended arena enemy"
 	)
@@ -338,7 +346,7 @@ func _test_run_transition_clears_stale_choice() -> void:
 	main._apply_pending_choice(0)
 	main._on_echo_defeated()
 	main._on_enemy_defeated(50)
-	_expect(main.echo_value.text == "Echo: Defeated", "echo defeat status persists for the run")
+	_expect(main.echo_value.text == "Echo 1: Defeated", "echo defeat status persists for the run")
 	main.free()
 	paused = false
 

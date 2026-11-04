@@ -72,10 +72,6 @@ func _update_weapon_selection() -> void:
 		select_weapon_slot(0)
 	elif Input.is_action_just_pressed(&"weapon_slot_2"):
 		select_weapon_slot(1)
-	elif Input.is_action_just_pressed(&"weapon_previous"):
-		cycle_weapon(-1)
-	elif Input.is_action_just_pressed(&"weapon_next"):
-		cycle_weapon(1)
 
 
 func suppress_combat_input_until_released() -> void:

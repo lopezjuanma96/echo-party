@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+[node name="ResolutionRoom" type="Node"]
+script = ExtResource("1_launcher")
+echo_jobs = Array[StringName]([&"vanguard"])
+level = 5
+party_slots = 1
+enemy_population = 0
+start_at_resolution = true
+fallen_job = &"mender"
+fallen_level = 5
+memorial_slots = 1
+anchors = 0

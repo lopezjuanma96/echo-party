@@ -31,6 +31,22 @@ func replay_progression() -> HeroProgression:
 	return HeroProgression.from_dict(_progression_data.duplicate(true))
 
 
+func extended_with(progression: HeroProgression) -> HeroRecord:
+	if progression == null:
+		return null
+	var current := replay_progression()
+	if current == null:
+		return null
+	var current_choices := current.get_choices()
+	var extended_choices := progression.get_choices()
+	if progression.level <= current.level or extended_choices.size() <= current_choices.size():
+		return null
+	for index in current_choices.size():
+		if extended_choices[index] != current_choices[index]:
+			return null
+	return HeroRecord.new(runtime_id, display_name, progression.to_dict())
+
+
 func to_dict() -> Dictionary:
 	return {
 		"runtime_id": runtime_id,
