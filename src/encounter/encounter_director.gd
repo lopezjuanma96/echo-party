@@ -19,6 +19,10 @@ const OUTCOME_FAILED := &"failed"
 const STABLE_ORDER_BASE := 1_000_000
 ## Guards wave times against float drift from accumulating many physics deltas.
 const TIME_EPSILON := 0.000001
+## Fixed order; data cannot override identity, RNG, rewards, or runtime state.
+const ENEMY_OVERRIDE_PROPERTIES: Array[StringName] = [
+	&"move_speed", &"max_health", &"flee_distance", &"keep_distance", &"shot_damage",
+]
 
 @export var encounter_id: StringName = &"bell_court"
 @export var spawner_path := NodePath("../Enemies")
@@ -37,6 +41,7 @@ var damage_taken := {}
 var healing_done := 0.0
 var had_echo := false
 var echo_survived := true
+var echo_survival: Array[bool] = []
 var party_jobs: Array[StringName] = []
 var last_report := {}
 var random := RandomNumberGenerator.new()
@@ -44,7 +49,12 @@ var _spawn_count := 0
 var _saved_population := 0
 var _population_paused := false
 var _healing_baselines := {}
-var _echo: EchoActor
+var _echoes: Array[EchoActor] = []
+var _echo_job_ids: Array[StringName] = []
+var _echo_slots: Array[int] = []
+var _active_waves: Array = []
+var _enemy_health_multiplier := 1.0
+var _enemy_overrides: Dictionary = {}
 
 
 func _ready() -> void:
@@ -89,7 +99,8 @@ func start_encounter(new_party_jobs: Array, new_encounter_id: StringName = &"") 
 		if not StringName(job_value).is_empty():
 			party_jobs.append(StringName(job_value))
 	random.seed = int(data["seed"])
-	_find_echo()
+	_find_echoes()
+	_configure_waves(data)
 	_track_party()
 	if spawner != null:
 		_saved_population = spawner.target_population
@@ -120,6 +131,24 @@ func get_alive_enemy_count() -> int:
 	return count
 
 
+func _configure_waves(data: Dictionary) -> void:
+	var base_waves: Array = data["waves"]
+	_active_waves = base_waves.duplicate(true)
+	_enemy_health_multiplier = 1.0
+	_enemy_overrides = data.get("enemy_overrides", {}).duplicate(true)
+	var adjustment: Dictionary = data.get("large_party", {})
+	if adjustment.is_empty() or _echoes.size() < int(adjustment.get("min_echoes", 2)):
+		return
+	_enemy_health_multiplier = float(adjustment.get("enemy_health_multiplier", 1.0))
+	for extra_wave: Dictionary in adjustment.get("extra_waves", []):
+		var insert_at := _active_waves.size()
+		for index in _active_waves.size():
+			if float(_active_waves[index]["time"]) > float(extra_wave["time"]):
+				insert_at = index
+				break
+		_active_waves.insert(insert_at, extra_wave)
+
+
 func _physics_process(delta: float) -> void:
 	match state:
 		STATE_WARNING:
@@ -131,10 +160,7 @@ func _physics_process(delta: float) -> void:
 			elapsed += delta
 			_spawn_due_waves()
 			_track_party()
-			if (
-				waves_spawned >= EncounterCatalog.get_encounter(encounter_id)["waves"].size()
-				and get_alive_enemy_count() == 0
-			):
+			if waves_spawned >= _active_waves.size() and get_alive_enemy_count() == 0:
 				_clear()
 
 
@@ -147,10 +173,13 @@ func _begin_active() -> void:
 
 
 func _spawn_due_waves() -> void:
-	var waves: Array = EncounterCatalog.get_encounter(encounter_id)["waves"]
-	while waves_spawned < waves.size():
-		var wave: Dictionary = waves[waves_spawned]
+	while waves_spawned < _active_waves.size():
+		var wave: Dictionary = _active_waves[waves_spawned]
 		if elapsed + TIME_EPSILON < float(wave["time"]):
+			break
+		# Optional occupancy gate keeps delayed Gallery groups readable even when
+		# a party is slow to kill. Encounters without it retain timed spawning.
+		if wave.has("max_alive") and get_alive_enemy_count() > int(wave["max_alive"]):
 			break
 		_spawn_wave(wave)
 		waves_spawned += 1
@@ -180,6 +209,8 @@ func _spawn_enemy(enemy_id: StringName, spawn_position: Vector2, grace: float) -
 	enemy.stable_spawn_order = STABLE_ORDER_BASE + _spawn_count
 	enemy.position = spawn_position
 	enemy.spawn_grace = grace
+	_apply_enemy_overrides(enemy, _enemy_overrides.get(enemy_id, {}))
+	enemy.max_health *= _enemy_health_multiplier
 	enemy.set_simulation_seed(random.randi())
 	enemy.defeated.connect(_on_enemy_defeated)
 	enemy.dealt_damage.connect(_on_enemy_dealt_damage)
@@ -188,6 +219,28 @@ func _spawn_enemy(enemy_id: StringName, spawn_position: Vector2, grace: float) -
 		enemy.connect(&"cast_interrupted", _on_cast_interrupted)
 	add_child(enemy)
 	return enemy
+
+
+## Unknown keys and invalid values are ignored without consuming RNG. Require
+## an exported numeric property as well as the explicit allow-list.
+func _apply_enemy_overrides(enemy: EnemyActor, overrides: Dictionary) -> void:
+	for property_name in ENEMY_OVERRIDE_PROPERTIES:
+		if not overrides.has(property_name):
+			continue
+		var value: Variant = overrides[property_name]
+		if typeof(value) != TYPE_FLOAT and typeof(value) != TYPE_INT:
+			continue
+		var number := float(value)
+		if not is_finite(number) or number < 0.0 or (property_name == &"max_health" and number <= 0.0):
+			continue
+		for info: Dictionary in enemy.get_property_list():
+			if (
+				StringName(info["name"]) == property_name
+				and (int(info["usage"]) & PROPERTY_USAGE_EDITOR) != 0
+				and int(info["type"]) == TYPE_FLOAT
+			):
+				enemy.set(property_name, number)
+				break
 
 
 func _clear() -> void:
@@ -214,6 +267,13 @@ func build_report() -> Dictionary:
 	var uncovered_names: Array[String] = []
 	for need in PartyNeeds.uncovered(party_jobs, needs):
 		uncovered_names.append(String(need))
+	var echo_reports: Array[Dictionary] = []
+	for index in _echoes.size():
+		echo_reports.append({
+			"slot": _echo_slots[index] + 1,
+			"job_id": String(_echo_job_ids[index]),
+			"survived": echo_survival[index],
+		})
 	return {
 		"encounter_id": String(encounter_id),
 		"display_name": EncounterCatalog.get_display_name(encounter_id),
@@ -225,6 +285,7 @@ func build_report() -> Dictionary:
 		"healing_done": healing_done,
 		"had_echo": had_echo,
 		"echo_survived": echo_survived,
+		"echoes": echo_reports,
 		"party_jobs": party,
 		"needs": need_names,
 		"uncovered": uncovered_names,
@@ -248,9 +309,15 @@ func _clear_counters() -> void:
 	healing_done = 0.0
 	had_echo = false
 	echo_survived = true
+	echo_survival.clear()
 	_spawn_count = 0
 	_healing_baselines = {}
-	_echo = null
+	_echoes.clear()
+	_echo_job_ids.clear()
+	_echo_slots.clear()
+	_active_waves.clear()
+	_enemy_health_multiplier = 1.0
+	_enemy_overrides.clear()
 
 
 func _set_state(new_state: StringName) -> void:
@@ -260,17 +327,24 @@ func _set_state(new_state: StringName) -> void:
 		state_changed.emit(new_state)
 
 
-func _find_echo() -> void:
-	_echo = null
+func _find_echoes() -> void:
+	_echoes.clear()
+	_echo_job_ids.clear()
+	_echo_slots.clear()
+	echo_survival.clear()
 	for actor_node in get_tree().get_nodes_in_group(&"friendly_actors"):
 		if actor_node is EchoActor:
-			_echo = actor_node
-			had_echo = true
-			return
+			_echoes.append(actor_node)
+	_echoes.sort_custom(func(a: EchoActor, b: EchoActor) -> bool: return a.slot_index < b.slot_index)
+	had_echo = not _echoes.is_empty()
+	for echo in _echoes:
+		echo_survival.append(true)
+		_echo_job_ids.append(echo.hero_record.replay_progression().get_job_id())
+		_echo_slots.append(echo.slot_index)
 
 
 ## Accumulates healing from per-actor `total_healing_done` deltas (so a defeated
-## echo's healing is not lost) and notes whether the echo is still standing.
+## echo's healing is not lost) and notes whether each echo is still standing.
 func _track_party() -> void:
 	for actor_node in get_tree().get_nodes_in_group(&"friendly_actors"):
 		var actor := actor_node as HeroActor
@@ -281,12 +355,12 @@ func _track_party() -> void:
 		if _healing_baselines.has(actor_id):
 			healing_done += maxf(total - float(_healing_baselines[actor_id]), 0.0)
 		_healing_baselines[actor_id] = total
-	if had_echo and echo_survived:
-		if (
-			not is_instance_valid(_echo)
-			or _echo.is_queued_for_deletion()
-			or _echo.is_defeated
-		):
+	echo_survived = true
+	for index in _echoes.size():
+		var echo := _echoes[index]
+		if not is_instance_valid(echo) or echo.is_queued_for_deletion() or echo.is_defeated:
+			echo_survival[index] = false
+		if not echo_survival[index]:
 			echo_survived = false
 
 

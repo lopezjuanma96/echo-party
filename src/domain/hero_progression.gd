@@ -107,6 +107,19 @@ func to_dict() -> Dictionary:
 	}
 
 
+## A copy that keeps only chosen levels: unchosen pending levels and their XP
+## are dropped, so a record never claims a level whose choice was not made.
+func chosen_only() -> HeroProgression:
+	if not has_pending_choice():
+		return HeroProgression.from_dict(to_dict())
+	var chosen := get_choices()
+	return HeroProgression.from_dict({
+		"level": chosen.size() + 1,
+		"experience": chosen.size() * XP_PER_LEVEL,
+		"choices": chosen,
+	})
+
+
 static func from_dict(data: Variant) -> HeroProgression:
 	if not data is Dictionary:
 		return null

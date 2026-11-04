@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+[node name="ResolutionTwoSlots" type="Node"]
+script = ExtResource("1_launcher")
+echo_jobs = Array[StringName]([&"vanguard", &"arcanist"])
+level = 5
+party_slots = 2
+enemy_population = 0
+start_at_resolution = true
+fallen_job = &"mender"
+fallen_level = 6
+memorial_jobs = Array[StringName]([&"mender", &"vanguard"])
+memorial_slots = 2
+anchors = 1

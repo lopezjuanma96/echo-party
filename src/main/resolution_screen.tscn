@@ -1,0 +1,215 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/main/resolution_screen.gd" id="1_screen"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.035, 0.047, 0.071, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.82, 0.25, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="ResolutionScreen" type="Control"]
+process_mode = 3
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_screen")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.02, 0.027, 0.043, 0.9)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(880, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 18
+
+[node name="Content" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.25, 1)
+theme_override_font_sizes/font_size = 26
+text = "ROSTER RESOLUTION"
+horizontal_alignment = 1
+
+[node name="Summary" type="Label" parent="Center/Panel/Margin/Content"]
+custom_minimum_size = Vector2(832, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Columns" type="HBoxContainer" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Rows" type="VBoxContainer" parent="Center/Panel/Margin/Content/Columns"]
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Row1" type="Button" parent="Center/Panel/Margin/Content/Columns/Rows"]
+custom_minimum_size = Vector2(520, 38)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+alignment = 0
+clip_text = true
+
+[node name="Row2" type="Button" parent="Center/Panel/Margin/Content/Columns/Rows"]
+custom_minimum_size = Vector2(520, 38)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+alignment = 0
+clip_text = true
+
+[node name="Row3" type="Button" parent="Center/Panel/Margin/Content/Columns/Rows"]
+custom_minimum_size = Vector2(520, 38)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+alignment = 0
+clip_text = true
+
+[node name="Row4" type="Button" parent="Center/Panel/Margin/Content/Columns/Rows"]
+custom_minimum_size = Vector2(520, 38)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+alignment = 0
+clip_text = true
+
+[node name="Row5" type="Button" parent="Center/Panel/Margin/Content/Columns/Rows"]
+custom_minimum_size = Vector2(520, 38)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+alignment = 0
+clip_text = true
+
+[node name="Info" type="VBoxContainer" parent="Center/Panel/Margin/Content/Columns"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Trial" type="Label" parent="Center/Panel/Margin/Content/Columns/Info"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.25, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3
+
+[node name="Coverage" type="Label" parent="Center/Panel/Margin/Content/Columns/Info"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3
+
+[node name="NextHero" type="Label" parent="Center/Panel/Margin/Content/Columns/Info"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.95, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3
+
+[node name="Anchors" type="Label" parent="Center/Panel/Margin/Content/Columns/Info"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.64, 0.35, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3
+
+[node name="Capacity" type="Label" parent="Center/Panel/Margin/Content/Columns/Info"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
+
+[node name="Outcome" type="Label" parent="Center/Panel/Margin/Content"]
+custom_minimum_size = Vector2(832, 44)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="Discard" type="Button" parent="Center/Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(210, 44)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+text = "Discard (Anchor) [X]"
+
+[node name="Confirm" type="Button" parent="Center/Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(180, 44)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+text = "Confirm [Enter]"
+
+[node name="Cancel" type="Button" parent="Center/Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(170, 44)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+text = "Cancel [Esc]"
+
+[node name="Start" type="Button" parent="Center/Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(210, 44)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+text = "Start run [Enter]"
+
+[node name="KeyHint" type="Label" parent="Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.61, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "1-5 pick a row · Esc / Backspace cancel · X discard with an Anchor · Enter start the run"
+horizontal_alignment = 1

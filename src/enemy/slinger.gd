@@ -16,6 +16,10 @@ const SHOT_SPAWN_OFFSET := 22.0
 const AIM_LINE_COLOR := Color(0.9, 0.12, 0.12, 0.75)
 const AIM_MARKER_RADIUS := 18.0
 
+@export var shot_damage := SHOT_DAMAGE
+@export var flee_distance := FLEE_DISTANCE
+@export var keep_distance := KEEP_DISTANCE
+
 var state := &"kite"
 var state_time_left := 0.0
 var fire_cooldown_left := FIRST_SHOT_DELAY
@@ -52,9 +56,9 @@ func _tick_kite() -> void:
 	if to_nearest.is_zero_approx():
 		return
 	var distance := to_nearest.length()
-	if distance < FLEE_DISTANCE:
+	if distance < flee_distance:
 		velocity = -to_nearest.normalized() * move_speed
-	elif distance > KEEP_DISTANCE:
+	elif distance > keep_distance:
 		velocity = to_nearest.normalized() * move_speed
 
 
@@ -100,7 +104,7 @@ func _fire() -> void:
 	shot.launch(
 		global_position + aim_direction * SHOT_SPAWN_OFFSET,
 		aim_direction,
-		SHOT_DAMAGE,
+		shot_damage,
 		SHOT_SPEED,
 		SHOT_MAX_DISTANCE
 	)
@@ -132,6 +136,10 @@ func _mcp_state() -> Dictionary:
 		"pos_y": global_position.y,
 		"health": health,
 		"max_health": max_health,
+		"move_speed": move_speed,
+		"flee_distance": flee_distance,
+		"keep_distance": keep_distance,
+		"shot_damage": shot_damage,
 		"state": "spawn_grace" if spawn_grace > 0.0 else ("defeated" if is_defeated else String(state)),
 		"state_time_left": spawn_grace if spawn_grace > 0.0 else state_time_left,
 		"cast_progress": get_windup_progress(),

@@ -101,6 +101,17 @@ Notes:
   prints the path, and the PNG can be opened from disk. Use
   `enemy_population = 0` on a scenario for isolated checks, so incidental kills
   cannot open the level-up modal.
+- Playtest briefs must state expected values that are easy to misread. An echo
+  in a new run starts as a level-1 Novice and replays its record as it levels,
+  so check its record (`roster_party`), not its live `job_id`. The MCP's own
+  `game_paused` flag is not the tree's pause state; read Main's `paused`.
+  The MCP cannot place the cursor at a world position, so drive focus through
+  the scenario export `debug_focus_address`.
+- For a static frame at a known time, Godot's movie writer is cheaper and more
+  exact than an MCP playtest. For example,
+  `godot --path . --write-movie /tmp/fm/f.png --fixed-fps 60 --quit-after 20 res://tests/scenarios/<file>.tscn`
+  writes one PNG per frame. It needs the display variables above, and it
+  cannot inject input.
 - The MCP serializer silently drops `StringName`, `Vector2`, `NodePath`, and
   `Object` values in `_mcp_state()`. Return plain `String`s, numbers, bools,
   arrays, and dictionaries, for example `String(job_id)`, `pos_x`/`pos_y`,
