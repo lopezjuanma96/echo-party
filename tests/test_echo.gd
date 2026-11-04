@@ -22,10 +22,11 @@ func _run_tests() -> void:
 	_test_echo_commands()
 	_test_new_run_reset()
 	_test_run_transition_clears_stale_choice()
-	_test_hud_panels_do_not_overlap()
+	_test_third_job_choice()
+	await _test_hud_panels_do_not_overlap()
 
 	if _failures.is_empty():
-		print("Hero record, echo, and run reset tests passed (9 cases).")
+		print("Hero record, echo, and run reset tests passed (10 cases).")
 		quit(0)
 	else:
 		for failure in _failures:
@@ -164,6 +165,17 @@ func _test_deterministic_target_and_weapon_selection() -> void:
 	_expect(echo.choose_target(candidates) == earlier, "equal-distance targets use stable spawn order")
 	_expect(echo.choose_weapon_for_distance(300.0) == &"wand", "echo chooses shortest ranged weapon that reaches")
 	_expect(echo.choose_weapon_for_distance(600.0) == &"staff", "echo chooses long-range weapon when needed")
+	var mender_progression := HeroProgression.new()
+	mender_progression.grant_experience(200)
+	mender_progression.apply_attribute_choice(2, HeroProgression.ATTRIBUTE_MIGHT)
+	mender_progression.apply_job_choice(3, HeroProgression.JOB_MENDER)
+	var mender_echo := EchoScene.instantiate() as EchoActor
+	root.add_child(mender_echo)
+	mender_echo.configure(HeroRecord.capture("hero-mender", "Hero Mender", mender_progression), active)
+	mender_echo.grant_shared_experience(200)
+	_expect(mender_echo.choose_weapon_for_distance(70.0) == &"mace", "Mender echo uses Mace in melee range")
+	_expect(mender_echo.choose_weapon_for_distance(100.0) == &"sling", "Mender echo uses Sling beyond melee range")
+	mender_echo.free()
 	echo.free()
 	later.free()
 	earlier.free()
@@ -239,6 +251,8 @@ func _test_new_run_reset() -> void:
 	player.attack_damage = 55.0
 	player.apply_job_loadout(HeroProgression.JOB_VANGUARD)
 	player.attack_cooldowns[&"sword"] = 2.0
+	player.apply_job_loadout(HeroProgression.JOB_MENDER)
+	player.ability_cooldown_left = 3.0
 	player.dodge_time_left = 0.1
 	player.dodge_cooldown_left = 0.4
 	player.suppress_combat_input = true
@@ -251,8 +265,10 @@ func _test_new_run_reset() -> void:
 	_expect(
 		player.get_weapon_loadout() == [&"knife"]
 		and player.get_selected_weapon_id() == &"knife"
-		and float(player.attack_cooldowns[&"knife"]) == 0.0,
-		"new run restores Knife and clears attack cooldown"
+		and float(player.attack_cooldowns[&"knife"]) == 0.0
+		and player.ability_id == &""
+		and player.ability_cooldown_left == 0.0,
+		"new run restores Knife and clears attack and ability cooldowns"
 	)
 	_expect(
 		player.dodge_time_left == 0.0
@@ -327,13 +343,43 @@ func _test_run_transition_clears_stale_choice() -> void:
 	paused = false
 
 
+func _test_third_job_choice() -> void:
+	var main := MainScene.instantiate()
+	root.add_child(main)
+	main.progression.grant_experience(200)
+	main.progression.apply_attribute_choice(2, HeroProgression.ATTRIBUTE_MIGHT)
+	main._show_next_choice_if_needed()
+	var shortcut_event := main.choice_three_button.shortcut.events[0] as InputEventKey
+	_expect(
+		main.choice_three_button.visible
+		and shortcut_event != null
+		and shortcut_event.physical_keycode == KEY_3,
+		"advancement shows the third job button with shortcut 3"
+	)
+	main._on_choice_three_pressed()
+	_expect(
+		main.progression.get_job_id() == HeroProgression.JOB_MENDER
+		and main.player.get_weapon_loadout() == [&"mace", &"sling"]
+		and main.player.ability_id == &"mend",
+		"third choice applies the Mender job and ability"
+	)
+	main.free()
+	paused = false
+
+
 func _test_hud_panels_do_not_overlap() -> void:
 	root.size = Vector2i(1280, 720)
 	var main := MainScene.instantiate()
 	root.add_child(main)
+	current_scene = main
+	main.apply_scenario(&"mender", &"mender", 5, &"")
+	await process_frame
+	await process_frame
 	var instructions := main.get_node("HUD/Instructions") as Control
 	var run_status := main.get_node("HUD/RunStatus") as Control
 	var progression := main.get_node("HUD/Progression") as Control
+	var weapon := main.get_node("HUD/Weapon") as Control
+	var health := main.get_node("HUD/Health") as Control
 	_expect(
 		instructions.get_rect().end.y + 12.0 <= run_status.get_rect().position.y,
 		"controls and run/echo panels retain vertical separation"
@@ -346,6 +392,79 @@ func _test_hud_panels_do_not_overlap() -> void:
 		progression.get_rect().end.y <= root.size.y,
 		"left-hand HUD panels fit inside the viewport"
 	)
+	_expect(
+		run_status.get_rect().size.y >= run_status.get_combined_minimum_size().y
+		and instructions.get_rect().size.y >= instructions.get_combined_minimum_size().y,
+		"left-hand panels are tall enough for their content"
+	)
+	_expect(
+		weapon.get_rect().position.y >= 0.0
+		and weapon.get_rect().end.y <= root.size.y
+		and not weapon.get_rect().intersects(health.get_rect())
+		and not weapon.get_rect().intersects(run_status.get_rect())
+		and not weapon.get_rect().intersects(progression.get_rect()),
+		"weapon panel fits the viewport and overlaps no other panel"
+	)
+	var trial := main.get_node("HUD/Trial") as Control
+	var banner := main.get_node("HUD/TrialBanner") as Control
+	var report := main.get_node("HUD/TrialReport") as Control
+	main.encounter_director.state = EncounterDirector.STATE_WARNING
+	main.encounter_director.state_time_left = 3.0
+	main._update_trial_hud()
+	main._on_trial_report_ready({
+		"display_name": "Bell Court",
+		"outcome": "failed",
+		"time": 31.0,
+		"casts_landed": 3,
+		"casts_broken": 1,
+		"damage_taken": {
+			"brute": {"hero": 80.0, "echo": 40.0},
+			"hexcaller": {"hero": 45.0, "echo": 45.0},
+			"skitter": {"hero": 60.0, "echo": 30.0},
+			"slinger": {"hero": 15.0, "echo": 15.0},
+		},
+		"healing_done": 0.0,
+		"had_echo": true,
+		"echo_survived": false,
+		"uncovered": ["interrupt", "area", "sustain"],
+	})
+	await process_frame
+	await process_frame
+	var panels: Array[Control] = [instructions, run_status, progression, weapon, health]
+	_expect(
+		trial.visible
+		and trial.get_rect().position.y >= 0.0
+		and trial.get_rect().size.y >= trial.get_combined_minimum_size().y
+		and trial.get_rect().end.y + 12.0 <= banner.get_rect().position.y,
+		"Trial panel is visible, fits its content, and sits above the warning banner"
+	)
+	var trial_clear := true
+	var report_clear := true
+	for other in panels:
+		trial_clear = trial_clear and not trial.get_rect().grow(8.0).intersects(other.get_rect())
+		report_clear = report_clear and not report.get_rect().grow(8.0).intersects(other.get_rect())
+	_expect(trial_clear, "Trial panel keeps 8 px clear of every existing panel")
+	_expect(
+		banner.visible
+		and banner.get_rect().end.y <= root.size.y
+		and not banner.get_rect().grow(8.0).intersects(instructions.get_rect())
+		and not banner.get_rect().intersects(health.get_rect())
+		and not banner.get_rect().intersects(trial.get_rect()),
+		"warning banner overlaps no panel"
+	)
+	_expect(
+		report.visible
+		and report.get_rect().position.y >= 0.0
+		and report.get_rect().end.y <= root.size.y
+		and report.get_rect().end.x <= root.size.x
+		and report.get_rect().size.y >= report.get_combined_minimum_size().y
+		and report_clear
+		and not report.get_rect().intersects(trial.get_rect())
+		and not report.get_rect().intersects(banner.get_rect()),
+		"worst-case Trial report fits the viewport and overlaps no panel: %s" % [report.get_rect()]
+	)
+	main.encounter_director.state = EncounterDirector.STATE_IDLE
+	current_scene = null
 	main.free()
 
 

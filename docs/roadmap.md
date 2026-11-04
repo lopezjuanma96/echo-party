@@ -35,6 +35,11 @@ second run differently because the first hero returned as an echo.
 
 Exit condition: testers deliberately build a hero for a future party need.
 
+Status: every item above is implemented (variant enemies, party commands,
+Mender, the Bell Court Trial, and echo intent/cooldown feedback). A deterministic
+bot-proxy tuning pass is recorded in the M2 plan. The exit condition and final
+balance still need human playtest evidence.
+
 ## M3: Roster Roguelite
 
 - Implement replacement decisions after death.

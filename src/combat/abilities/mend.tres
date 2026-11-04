@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/combat/ability_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"mend"
+display_name = "Mend"
+cooldown = 6.0
+radius = 240.0
+heal_amount = 60.0
+self_heal_fraction = 0.5
+color = Color(0.36, 0.85, 0.54, 1)

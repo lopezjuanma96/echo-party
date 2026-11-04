@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/enemy/skitter.gd" id="1_skitter"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_skitter"]
+radius = 11.0
+
+[node name="Skitter" type="CharacterBody2D" groups=["enemies"]]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_skitter")
+enemy_id = &"skitter"
+enemy_name = "Skitter"
+move_speed = 150.0
+contact_damage = 8.0
+contact_interval = 0.6
+max_health = 45.0
+experience_reward = 10
+spawn_grace = 0.8
+
+[node name="Body" type="Polygon2D" parent="."]
+polygon = PackedVector2Array(0, -11, 11, 11, -11, 11)
+color = Color(0.94902, 0.639216, 0.227451, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_skitter")
+
+[node name="ContactArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactArea"]
+shape = SubResource("CircleShape2D_skitter")

@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+[node name="VanguardVanguard4Brute" type="Node"]
+script = ExtResource("1_launcher")
+player_job = &"vanguard"
+echo_job = &"vanguard"
+level = 4
+enemy_population = 0
+debug_enemies = Array[StringName]([&"brute"])

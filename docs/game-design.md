@@ -79,7 +79,13 @@ behavior in this slice.
 The echo follows the active hero while idle and uses deterministic target and
 range-aware weapon selection within a leash around that hero. Vanguard closes
 to melee range; Arcanist approaches when out of range and retreats when an
-enemy is too close. Every enemy defeat, including an echo kill, advances both
+enemy is too close. Mender prioritizes Mend for a friendly at 60% health or
+less, retreats from nearby enemies, and limits pursuit to a support leash.
+An echo carrying an interrupting weapon (Vanguard's lance) prefers a casting
+enemy within 450 pixels over other targets, switches to the interrupting weapon
+once the caster is in its range, and shows the `interrupt` intent while closing
+on or attacking it. Manual focus still wins.
+Every enemy defeat, including an echo kill, advances both
 the active hero and the echo. For now, an echo stops at the highest level whose
 choice is complete in its record; extending that history remains later work.
 Echoes have health and can take enemy contact damage. A defeated echo is absent
@@ -95,7 +101,35 @@ is ordered. `Q` toggles a hold-position stance: the echo keeps its target and
 attacks enemies in weapon range but does not approach or retreat. `R` clears
 focus and hold, then moves the echo back to the active hero before normal
 tactical behavior resumes. The HUD exposes the current command, tactical
-intent, and echo health so these overrides remain inspectable.
+intent, echo cooldowns, and echo health so these overrides remain inspectable.
+
+### Echo Intent Feedback
+
+The echo shows what it is doing, and how soon it can act again, without a
+dedicated inspection screen. A status overlay below the echo shows its health,
+the selected weapon's cooldown, and (for jobs with an ability) a pip that fills
+as the ability recharges and turns solid when ready. An intent glyph and a line
+to the intent target use the same colour per intent, and each glyph has its own
+shape so colour is never the only signal:
+
+| Intent | Glyph | Colour |
+|---|---|---|
+| attack | crossed lines | red |
+| approach | chevron toward the target | cyan |
+| retreat | chevron away from the target | orange |
+| hold | two bars | grey |
+| follow | three dots | blue |
+| regroup | ring with dot | blue |
+| heal | plus | green |
+| interrupt | zigzag | yellow |
+| idle | none | none |
+
+The shown intent changes at most every 0.25 seconds. During a fight, waiting on
+weapon cooldown shows as attack (or interrupt against a casting target) rather
+than hold; the hold stance still shows hold. The HUD lists the intent with its
+target and range (`Interrupt → Hexcaller · 212 px`, `Mend → Hero 2 · 38%`) and
+every cooldown (`Mace Ready · Sling 0.4s · Mend 3.4s`). When Mend lands, the
+healed ally also gets a green ring and a floating amount, not only the caster.
 
 ## Death And Roster Resolution
 
@@ -129,7 +163,7 @@ The current vertical slice uses stable attribute IDs `might` and `vitality`.
 Heroes begin at level 1 with 0 XP, 100 max health, 25 attack damage, and the
 `novice` job. Every 100 total XP grants a level and exactly one ordered build
 choice. Level 2 offers Might or Vitality. Level 3 is the advancement level at
-200 total XP and offers `vanguard` or `arcanist` instead of an attribute.
+200 total XP and offers `vanguard`, `arcanist`, or `mender` instead of an attribute.
 Level 4 and every later level return to attributes; progression is temporarily
 unlimited in this prototype. Might adds 5 attack damage; Vitality adds 20 max
 health and raises current health by the same amount rather than fully healing.
@@ -176,12 +210,24 @@ Basic attacks may be melee shapes such as an arc or thrust, or physical ranged
 attacks such as a bolt that travels until it hits something or reaches its
 maximum distance.
 
-The prototype has five stable weapon IDs. Novices equip only `knife`, a short,
+The prototype has seven stable weapon IDs. Novices equip only `knife`, a short,
 quick melee arc; their second slot therefore does nothing. Vanguards equip
 `sword`, a medium and wider melee arc, and `lance`, a long and narrow melee
 thrust. Arcanists equip `wand`, a shorter and quicker projectile, and `staff`,
-a longer and slower projectile. Advancing changes the loadout immediately and
-selects its first slot. All five use progression-derived attack damage.
+a longer and slower projectile. Menders equip `mace`, a wide melee arc, and
+`sling`, a medium-range projectile. Advancing changes the loadout immediately
+and selects its first slot. Weapons use progression-derived attack damage
+multiplied by their `damage_multiplier`; both Mender weapons use the default
+0.8 multiplier, so 25 base damage deals 20.
+
+Two weapons carry role flags:
+
+- `lance` hits are marked `interrupts`, which breaks an enemy cast outright.
+- `staff` bolts splash for 60% damage on other enemies within 80 pixels of an
+  enemy hit. Wall hits do not splash.
+
+Basic attacks are otherwise single-target, so splash makes the staff the
+Arcanist's answer to packs.
 
 ### Skills
 
@@ -197,32 +243,154 @@ four targeting modes:
    area effect there.
 4. **Unit:** waits for a (click in) valid self, ally, enemy, or other target within range.
 
-Skill-slot keys remain undecided. Function keys and keys surrounding `WASD`
-are both candidates and must be remappable.
+The first ability, Mend, is immediate and costs no mana. The remappable
+`ability_1` action defaults to `E`. Mend heals the friendly actor with the
+lowest health fraction within 240 pixels for 60, or 30 when targeting the
+caster. It has a 6-second cooldown; with no wounded target it does nothing and
+spends no cooldown. The 50% self-heal fraction is the default tuning for
+limiting solo Mender sustain.
 
 ## Initial Jobs
 
-The combat proof uses only two first jobs:
+The combat proof uses three first jobs:
 
 - **Vanguard:** holds attention, interrupts, and protects an ally.
 - **Arcanist:** deals ranged elemental damage and exploits controlled enemies.
+- **Mender:** provides backline sustain with weak offense and Mend.
 
-For this vertical slice, jobs are distinguished only by exclusive weapon
-loadouts: Vanguard uses Sword/Lance and Arcanist uses Wand/Staff. Skills, mana,
-and passives are not implemented yet.
+Jobs have exclusive weapon loadouts and may grant abilities. Vanguard uses
+Sword/Lance, Arcanist uses Wand/Staff, and Mender uses Mace/Sling. Mana and
+passives are not implemented yet.
 
-Names and abilities are placeholders. The pair exists to test whether a
-recorded defender and a newly controlled damage dealer, or the reverse, feels
-meaningfully different.
+Each job lists capability tags that Trials check: Vanguard provides
+`interrupt` and `area`, Arcanist provides `area` and `range`, and Mender
+provides `sustain`. Novice provides none.
+
+Names and abilities are placeholders. The jobs test whether recorded and newly
+controlled heroes form meaningfully different parties.
 
 ## Prototype Enemy Population
 
-The arena maintains seven wandering enemies. Each defeated enemy awards its XP
-once to the current active run, regardless of whether the active hero or echo
-made the kill, and is replaced after a short delay. Spawn choices use fixed
-seeds, stay inside the arena, avoid the active hero, and prefer separation from
-existing enemies. Because spawning follows paused simulation time,
-replacements cannot appear behind a level-choice modal.
+The arena maintains a population of seven enemies. Each defeated enemy awards
+its XP once to the current active run, regardless of whether the active hero
+or echo made the kill, and is replaced after a short delay. Spawn choices use
+fixed seeds, stay inside the arena, avoid the active hero, and prefer
+separation from existing enemies. Because spawning follows paused simulation
+time, replacements cannot appear behind a level-choice modal.
+
+Enemy variants test specific party skills. The mix depends on the active
+hero's level, and a separate seeded type stream chooses each variant, so
+spawn positions stay reproducible:
+
+| Level | Mix |
+| --- | --- |
+| 1–2 | Drifters only |
+| 3 | Drifter 55 / Skitter pack 25 / Slinger 20 |
+| 4+ | Drifter 40 / Skitter pack 20 / Slinger 15 / Brute 15 / Hexcaller 10 |
+
+The variants:
+
+- **Drifter** (`drifter`): a red square that wanders and deals contact damage.
+  50 HP, 50 XP.
+- **Skitter** (`skitter`): an orange triangle that tests area damage. It
+  spawns in packs of four within a 40-pixel cluster, pulses during a 0.8 s
+  spawn grace, then chases the nearest friendly and deals 8 contact damage
+  every 0.6 s. 45 HP, 10 XP each, so a level-5 hero cannot one-shot it.
+  - A pack takes one replacement slot, but its members count individually
+    toward the population afterward. The arena can briefly exceed seven until
+    enough enemies die.
+- **Brute** (`brute`): a dark-red octagon that tests protection.
+  - It chases the nearest friendly. Within 70 pixels it winds up for 0.9 s,
+    behind a red ground circle that fills and flashes dark crimson at the end.
+  - The slam deals 50 to every friendly within 88 pixels. The Brute then
+    recovers for 0.7 s, desaturated and stationary, before a 0.8 s cooldown.
+  - It deals no contact damage and cannot be interrupted. 600 HP, 70 XP.
+  - A moving hero can leave the circle in time, but an echo standing in melee
+    takes the slam.
+- **Hexcaller** (`hexcaller`): a magenta hexagon that tests interruption and
+  range. It keeps about 340 pixels from the nearest friendly (flees below 240,
+  approaches above 440).
+  - It casts for 2.0 s. At cast start it locks a radius-110 magenta circle on
+    the nearest friendly's position; the circle stays there and fills with
+    progress. On resolve, every friendly inside takes 55.
+  - A white radius-34 break ring and a 44×4 cast bar mark the cast as
+    interruptible. A `lance` hit breaks it, as do 60 cumulative damage during
+    the cast (for example, three Mender hits of 20). A break cancels the cast,
+    stuns it for 1.5 s, and shows a floating "INTERRUPTED" for 0.8 s.
+  - The first cast comes 1.0 s after spawn grace, with a 2.0 s cooldown after
+    each cast. 140 HP, 80 XP.
+- **Slinger** (`slinger`): a teal diamond that tests range and protection. It
+  keeps about 380 pixels from the nearest friendly (flees below 260).
+  - Every 2.4 s it fires at the friendly with the lowest health fraction within
+    600 pixels, nearest on ties. A 0.6 s windup shows a red aim line that tracks
+    its target for 0.45 s and freezes for the last 0.15 s. The line ends at the
+    target with a small marker rather than continuing through other friendlies.
+  - The dart travels at 420 for up to 640 pixels, stops at walls, and deals 14
+    to the first friendly it touches. A dodge-rolling hero takes none. 45 HP,
+    50 XP.
+
+Telegraph colours follow one rule: red or orange marks incoming damage, white
+marks interruptible, and green or cyan marks friendly effects. The Brute's
+last-0.1-second outline is therefore dark crimson, not white. Every telegraph
+lasts at least 0.6 seconds. Each variant also differs in shape, so recognising
+it does not depend on colour alone.
+
+## Trial: The Bell Court
+
+A Trial is a scripted encounter that names the party needs it checks. The first
+is **The Bell Court** (`bell_court`), which needs **interrupt, area, and
+sustain**. It fires once per run when the active hero reaches level 5 with no
+level choice pending. It also fires in run 1 with no echo (decision G5), so the
+first hero meets it with only their own job.
+
+- **Warning (3.0 s).** A banner names the Court and its needs. Open-arena
+  spawning pauses and the remaining drifters vanish without awarding XP.
+- **Active.** Every Court enemy spawns with 1.0 s of spawn grace.
+  - At t=0: two Brutes at (-150, -170) and (360, -150), and a Hexcaller at
+    (420, 150).
+  - At t=4 s: a Skitter pack of four at (-440, 220).
+  - At t=12 s: a Skitter pack of four at (460, 230).
+  - These centres and the 40-pixel pack jitter stay on-screen and outside the
+    HUD panels when the player is at the arena centre.
+  - Pack jitter and enemy seeds come from the encounter's own seeded random
+    stream (seed 7117), so the Court replays identically.
+- **Cleared** when every wave has spawned and no Court enemy is alive. Normal
+  spawning resumes. The only reward is kill XP (about 300).
+- **Failed** if the active hero is defeated first. The next run starts as usual
+  and the Court re-arms.
+
+Intended outcomes, from which the Court is tuned:
+
+| Pair | Covers | Expectation |
+| --- | --- | --- |
+| Vanguard + Mender | interrupt, area, sustain | clears; margin may vary by player/echo order |
+| Vanguard + Arcanist | interrupt, area | no sustain; fails or clears only thinly |
+| Arcanist + Mender | area, sustain | no reliable interrupt; circles land, heals offset some |
+| Vanguard + Vanguard | interrupt, area | no sustain; fails or clears only thinly |
+| Novice or solo | little or none | usually fails |
+
+The Vanguard echo prioritises casters and uses the Lance, so it interrupts
+without help. The Arcanist echo does not interrupt, though a player-controlled
+Arcanist can break casts with the Wand. The deterministic harness bot is only a
+balance proxy; human playtesting remains the exit-condition evidence.
+
+### Telling the player what is needed (decision G4)
+
+Testers must be able to see the need before they choose a job:
+
+- **Trial panel.** A top-centre panel is visible from run start:
+  `TRIAL · Bell Court · Lv 5` with an INTERRUPT / AREA / SUSTAIN chip each.
+  A covered chip reads `✓ NEED` and the covering job; an uncovered chip reads
+  `✗ NEED` and `Missing`, so state never relies on colour alone. Coverage is the
+  echo's recorded job plus the active hero's job once chosen. The echo's final
+  recorded job counts from the start of the run, before the echo replays its
+  choice, because the panel is for planning the next hero.
+- **Job modal.** At level 3 each job button lists the uncovered needs it fills,
+  e.g. `Fills Trial need: SUSTAIN ★`. Every option that fills a need gets the ★.
+- **Trial report.** For 10 seconds after a clear, or at the start of the next
+  run after a failure, a panel lists casts landed and broken, damage taken per
+  enemy (hero and echo), healing done, whether the echo survived, and a
+  `Missing: SUSTAIN → Mender provides SUSTAIN` line for each uncovered need.
 
 ## Open Design Questions
 
