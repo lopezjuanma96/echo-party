@@ -59,49 +59,62 @@ below a health threshold, or focusing marked enemies. Machine learning is out
 of scope until conventional AI has proven insufficient.
 
 If an echo exceeds the highest level in its build history, the player chooses
-its next attribute or skill when it levels. That choice extends the echo's
-history for future runs. This is part of party progression, not a temporary
-run bonus.
+its next attribute when it levels. That choice extends the echo's history for
+future runs. This is part of party progression, not a temporary run bonus.
 
-### First-Echo Vertical Slice
+Extension is a live choice through the same level-up modal as the hero's. The
+title names the echo (`ECHO 1 · Hero 2 (Mender) · LEVEL 6 — CHOOSE AN
+ATTRIBUTE`) and offers Might or Vitality; echoes always have a job, so
+extension levels are attributes. The hero's choice comes first, then each
+echo in slot order, one prompt per level gained, and no XP is lost. The choice
+replaces the echo's record in the roster immediately and becomes durable at the
+next save point. A defeated echo, or one whose hero falls while its choice is
+open, keeps only the levels it chose. Failure still counts as progression.
 
-The current temporary rules are intentionally narrower than the eventual
-roster loop. Active-hero defeat snapshots a strict, ordered `HeroRecord` in
-memory, increments the visible run number, and immediately starts a full-health
-level-1 Novice with Knife and 0 XP. Only the newest record is retained: its echo
-replaces any previous echo but also starts as a level-1 Novice. Each enemy
-reward grants equal XP to the active hero and echo. At each echo level, its
-recorded attribute or job choice is applied automatically, deriving the same
-stats and loadout in order rather than restoring the fallen hero's terminal
-state immediately. There is no disk persistence, roster choice, or memorial
-behavior in this slice.
+### Current Echo Runtime
 
-The echo follows the active hero while idle and uses deterministic target and
-range-aware weapon selection within a leash around that hero. Vanguard closes
-to melee range; Arcanist approaches when out of range and retreats when an
-enemy is too close. Mender prioritizes Mend for a friendly at 60% health or
-less, retreats from nearby enemies, and limits pursuit to a support leash.
-An echo carrying an interrupting weapon (Vanguard's lance) prefers a casting
-enemy within 450 pixels over other targets, switches to the interrupting weapon
-once the caster is in its range, and shows the `interrupt` intent while closing
-on or attacking it. Manual focus still wins.
-Every enemy defeat, including an echo kill, advances both
-the active hero and the echo. For now, an echo stops at the highest level whose
-choice is complete in its record; extending that history remains later work.
-Echoes have health and can take enemy contact damage. A defeated echo is absent
-for the remainder of that run and returns only when a later fallen active hero
-creates the newest record.
+Active-hero defeat snapshots a strict, ordered `HeroRecord`, increments the
+persistent hero number, and starts a full-health level-1 Novice with Knife and
+0 XP once the roster screen (see Death And Roster Resolution) is resolved.
+Normal play starts with one party slot and one memorial slot; Trial clears
+unlock their second slots.
+
+Every echo starts as a level-1 Novice and applies its recorded attribute or job
+choice automatically at each level, deriving the same stats and loadout in order
+rather than restoring the fallen hero's terminal state immediately. Each enemy
+reward grants its full XP once to the active hero and every living echo. Past
+the end of its record an echo keeps gaining levels, each one pending until the
+player chooses its attribute (see Echo Rules); its world label reads
+`ECHO 1 · Lv 6*` while a choice is pending.
+
+Echoes use slot-specific follow anchors and deterministic target and
+range-aware weapon selection within a leash around the active hero. Vanguard
+closes to melee range; Arcanist approaches when out of range and retreats when
+an enemy is too close. Mender prioritizes Mend for a friendly at 60% health or
+less, retreats from nearby enemies, and limits pursuit to a support leash. An
+echo carrying an interrupting weapon prefers a casting enemy within 450 pixels,
+switches to that weapon in range, and shows the `interrupt` intent. Manual focus
+still wins. Echoes take damage independently; a defeated echo is absent and
+stops receiving XP for the remainder of that run without removing its slot
+mate.
 
 ### Echo Commands
 
-The current party-command slice adds three deterministic overrides. Right-click
-an enemy to focus it; the purple target ring identifies the selected enemy, and
-the focus ends when that enemy dies, leaves the active hero's leash, or regroup
-is ordered. `Q` toggles a hold-position stance: the echo keeps its target and
-attacks enemies in weapon range but does not approach or retreat. `R` clears
-focus and hold, then moves the echo back to the active hero before normal
-tactical behavior resumes. The HUD exposes the current command, tactical
-intent, echo cooldowns, and echo health so these overrides remain inspectable.
+The mouse wheel cycles the command address `All → Echo 1 → Echo 2 → All`,
+limited to spawned slots. It returns to `All` after every command and when the
+addressed echo falls. Right-click an enemy to focus the addressed echoes; the
+purple target ring identifies the selected enemy and shows each focusing echo's
+slot. Focus ends when that enemy dies, leaves the active hero's leash, or
+regroup is ordered.
+
+`Q` toggles hold position for the addressed echoes: they keep their targets and
+attack enemies in weapon range but do not approach or retreat. On `All`, the
+command holds everyone unless everyone is already holding, in which case it
+releases everyone. `R` clears focus and hold, then moves the addressed echoes
+back to their follow anchors before normal tactical behavior resumes. Per-slot
+HUD rows expose command, tactical intent, cooldowns, and health. A short world
+label (`ECHO 2 · Lv 5`, plus the command when it is not follow) sits higher for
+each later slot, and focus-marker digits distinguish the echoes.
 
 ### Echo Intent Feedback
 
@@ -133,15 +146,55 @@ healed ally also gets a green ring and a floating amount, not only the caster.
 
 ## Death And Roster Resolution
 
-The active hero becomes a candidate echo after a run. If the party has room,
-the candidate can join it. If it is full, the player normally chooses an echo
-to replace.
+When the active hero falls, the run ends and the roster screen can open before
+the next run. The rules as shipped:
 
-Run-only preservation consumables can allow the current roster to remain
-unchanged, discarding the candidate. Memorial slots allow valuable echoes to
-be stored and later swapped into a party slot. Exact capacities are balance
-questions; the prototype should test two party members before assuming that a
-party of twenty remains readable or fun.
+- **Who qualifies.** Only a hero who chose a job (level 3 or later) becomes the
+  candidate. A hero that never advanced has no role, is not offered, and a
+  one-line notice says so.
+- **When the screen opens.** It opens when there is a candidate or the memorial
+  holds at least one hero (so swapping stays reachable after a short run).
+  Otherwise the next run starts at once. The tree is paused while it is open.
+- **Placement is mandatory.** A candidate must be placed or discarded before the
+  run can start. Capacity starts at 1 party slot and 1 memorial slot. The first
+  Trial clear earns `party_slot_2`; the third total clear earns
+  `memorial_slot_2`. An earned slot is usable at the next resolution, never by
+  adding an echo to a run in progress.
+
+| Action | Result |
+| --- | --- |
+| candidate → empty party or memorial slot | joins or is stored |
+| candidate → occupied party slot | takes the slot; the occupant goes to the first free memorial slot, else is **lost** |
+| candidate → occupied memorial slot | takes it; the occupant is **lost** |
+| party ↔ memorial, party ↔ party | swap (party order sets slot numbers) |
+| party/memorial → empty slot of the other zone | moves |
+| discard candidate | costs one Echo Anchor; roster and memorial unchanged |
+
+A move that loses a hero shows that hero's name and needs a second confirming
+press; lost heroes are gone for good. Moves that lose nobody commit at once and
+can be undone by moving the heroes again. Refusing a candidate with a discard
+needs an Echo Anchor and a second confirming press.
+
+**Echo Anchor.** A run-only preservation item (`anchor`) spent on the roster
+screen to discard the fallen hero. Each Trial clear grants one, up to a maximum
+of one held. It is saved only as part of an open resolution's `pending` entry;
+an unspent Anchor is dropped when the next run begins. Later loot tables may
+replace the clear-award source without changing the item rules.
+
+The screen shows each hero as `Hero N · Job · Lv L`, whether the party's jobs
+cover the next Trial's needs (`Roster covers: INTERRUPT ✓ Vanguard · AREA ✓
+Vanguard · SUSTAIN ✗`), the job the next hero should fill, the Anchor count, and
+the next capacity unlock, so a hero can be built for a need the roster lacks.
+Memorial heroes are frozen: they do not gain XP, extend their history, or join
+runs. M3 caps both zones at two slots; larger parties remain a later readability
+question.
+
+**Persistence.** Hero numbering, unlock IDs, per-Trial clear counts, party and
+memorial records persist across launches. The save points are death after chosen
+extensions are committed and `pending` is set, confirmed resolution with
+`pending` cleared, and Trial clear with its unlock award. Reopening with a
+pending entry restores that resolution and its Anchor before the first run.
+Closing mid-run abandons the run and any unsaved extension choices.
 
 ## Progression Layers
 
@@ -149,8 +202,8 @@ Permanent progression should create options rather than simply multiply
 damage:
 
 - new echoes and extended build histories;
-- additional party slots up to a tested cap;
-- memorial slots up to a tested cap;
+- party slots up to the M3 cap of two;
+- memorial slots up to the M3 cap of two;
 - new jobs, skills, enemies, regions, and encounter combinations; and
 - additions to the possible loot pool.
 
@@ -204,7 +257,7 @@ direction and an attack input, and use a weapon-specific internal cooldown.
 
 The default mouse scheme aims relative to the active hero and attacks with the
 left button. This maps naturally to aiming with a gamepad's right stick. Number
-keys and the mouse wheel switch equipped weapons in the prototype.
+keys `1` and `2` switch equipped weapons in the prototype.
 
 Basic attacks may be melee shapes such as an arc or thrust, or physical ranged
 attacks such as a bolt that travels until it hits something or reaches its
@@ -339,8 +392,12 @@ it does not depend on colour alone.
 
 A Trial is a scripted encounter that names the party needs it checks. The first
 is **The Bell Court** (`bell_court`), which needs **interrupt, area, and
-sustain**. It fires once per run when the active hero reaches level 5 with no
-level choice pending. It also fires in run 1 with no echo (decision G5), so the
+sustain**. Odd hero numbers face Bell Court and even hero numbers face
+**Slinger Gallery** (`slinger_gallery`). Rotation uses the persisted hero number
+and happens before roster resolution, so its Next Trial line, coverage and job
+advice name the next run. Closing and reopening preserves the selection. Either
+Trial fires once per run when the active hero reaches level 5 with no level
+choice pending. It also fires in run 1 with no echo (decision G5), so the
 first hero meets it with only their own job.
 
 - **Warning (3.0 s).** A banner names the Court and its needs. Open-arena
@@ -350,55 +407,143 @@ first hero meets it with only their own job.
     (420, 150).
   - At t=4 s: a Skitter pack of four at (-440, 220).
   - At t=12 s: a Skitter pack of four at (460, 230).
+  - With **two echoes present at the start**, the Court adds two Hexcallers at
+    t=0 at (-330, 250) and (520, -40), plus a Brute at t=8 at (300, 250).
+    Every Court enemy has 1.25 times its normal maximum health (Brute 750,
+    Hexcaller 175, Skitter 56.25); damage is unchanged. With zero or one echo,
+    the original waves and stats are completely unchanged.
   - These centres and the 40-pixel pack jitter stay on-screen and outside the
     HUD panels when the player is at the arena centre.
   - Pack jitter and enemy seeds come from the encounter's own seeded random
     stream (seed 7117), so the Court replays identically.
 - **Cleared** when every wave has spawned and no Court enemy is alive. Normal
-  spawning resumes. The only reward is kill XP (about 300).
-- **Failed** if the active hero is defeated first. The next run starts as usual
-  and the Court re-arms.
+  spawning resumes. Rewards are kill XP (300, or 530 with the two-echo spawns),
+  one Echo Anchor (maximum one held), and any capacity unlock earned by the
+  total clear count.
+- **Failed** if the active hero is defeated first. The next hero faces the other
+  Trial; the failure report still names the fallen hero's Court.
 
 Intended outcomes, from which the Court is tuned:
 
-| Pair | Covers | Expectation |
+| Party | Covers | Expectation |
 | --- | --- | --- |
 | Vanguard + Mender | interrupt, area, sustain | clears; margin may vary by player/echo order |
 | Vanguard + Arcanist | interrupt, area | no sustain; fails or clears only thinly |
 | Arcanist + Mender | area, sustain | no reliable interrupt; circles land, heals offset some |
 | Vanguard + Vanguard | interrupt, area | no sustain; fails or clears only thinly |
 | Novice or solo | little or none | usually fails |
+| Two-echo parties with Vanguard and Mender | interrupt, area, sustain | two-echo Court clears at echo levels 4 to 7, with tighter margins than a one-echo Court |
+| Arcanist + Arcanist + Vanguard | interrupt, area | no sustain; fails or clears only thinly |
+| Mender + Arcanist + Arcanist | area, sustain, range | no reliable interrupt; circles land, so it should fail or clear only thinly (the bot still clears at levels 4–5; needs human playtest) |
 
 The Vanguard echo prioritises casters and uses the Lance, so it interrupts
 without help. The Arcanist echo does not interrupt, though a player-controlled
 Arcanist can break casts with the Wand. The deterministic harness bot is only a
 balance proxy; human playtesting remains the exit-condition evidence.
 
+## Trial: The Slinger Gallery
+
+**Slinger Gallery** (`slinger_gallery`) checks **interrupt, area, and range**.
+Vanguard + Arcanist covers all three; Vanguard + Mender misses range. It uses
+existing enemies and the same level-5 trigger, 3-second warning, 1-second spawn
+grace, clear/failure rules and report as Bell Court. Seed **9203** controls enemy
+seeds and any pack jitter. Positions below are world coordinates with the hero
+at (0, 0); at 1280×720 that maps to screen (640, 360).
+
+| Earliest active time | Enemies and spawn centres |
+| --- | --- |
+| 0 s | Three Slingers: (360, -30), (540, 120), (-440, 280); two Hexcallers: (-330, 260), (520, 0) |
+| 8 s, once at most two enemies survive | Four Skitters: (300, 80), (410, 80), (300, 190), (410, 190) |
+| 18 s, once at most two enemies survive | Three Slingers: (-330, 150), (240, 280), (-540, 280); Hexcaller: (540, 270) |
+
+The Skitters form a loose square and converge into a melee pack. Each is an
+explicit single spawn, so the catalog's retained **40 px** pack-jitter radius
+adds no displacement to this layout. The optional wave `max_alive: 2` gate
+prevents delayed groups from stacking into a mob: at most **six** enemies are
+alive, including the large-party opening. Times are lower bounds, not forced
+reinforcements while the previous group remains intact.
+
+Gallery-only `enemy_overrides` apply before an enemy enters the tree:
+
+| Enemy | Move speed | Flee below | Approach above | Base max HP | Dart damage |
+| --- | --- | --- | --- | --- | --- |
+| Slinger | 300 px/s | 300 px | 360 px | 45 | 25 |
+| Hexcaller | 160 px/s | 250 px | 400 px | 140 (scene default) | — |
+
+These are exported properties applied by stable enemy ID through an explicit
+numeric allow-list. Other properties, unknown keys, nonnumeric/negative/nonfinite
+values, and nonpositive maximum health are ignored. The open arena and Bell
+Court retain their scene speeds (100/85), distances, Slinger damage (14), and
+other constants. Gallery Slingers (300 px/s) outrun echoes (220) and the hero
+(260) between their unchanged 0.6 s windups; their 300 px flee threshold still
+puts them within Sling/Wand/Staff range, so ranged weapons answer them and pure
+melee does not. The arena walls remain at x=±900, y=±550; spawn centres start at least
+248 px from a wall, but eventual cornering remains possible. No wall AI changed.
+
+With **two echoes present at encounter start**, add one Slinger at t=0 at
+**(265, -302)** and multiply every Gallery enemy's maximum health by **1.25**:
+Slinger/Skitter **56.25**, Hexcaller **175**. Damage and movement do not scale
+further. Zero- and one-echo parties get the base five-enemy opening and health.
+All spawn centres, complete potential jitter bounds, bodies and 40 px clearance
+fit on screen and clear the supplied HUD panels at the arena centre; Hexcaller
+bounds include the break ring and cast bar. All distinct spawn centres,
+including later and extra waves, are at least **100 px** apart beyond jitter.
+Every ranged spawn is at least **320 px** from centre.
+
+Clearing awards kill XP (**580**, or **630** with two echoes), one Echo Anchor
+(maximum one held), and capacity unlocks based on total clears across both
+Trials. There are **13** base enemies, or **14** with two echoes. The failure
+report keeps the Gallery name when the next hero rotates to Bell Court.
+
+| Party (active hero first) | Intended outcome | Default bot result |
+| --- | --- | --- |
+| Vanguard + Arcanist | clear | clears thinly at 25.3 s; hero 29 HP, echo lost |
+| Arcanist + Vanguard | clear | clears at 24.0 s; hero 120 HP |
+| Vanguard + Mender | fail or clear thinly | **miss:** clears at 23.0 s, hero 70 HP (the Mender's Sling is ranged) |
+| Mender + Vanguard | fail or clear thinly | **miss:** clears at 25.6 s, hero 95 HP (the Mender's Sling is ranged) |
+| Vanguard + Vanguard | fail or clear thinly | fails at 23.3 s |
+| Solo Vanguard | fail or clear thinly | fails at 12.9 s |
+| Vanguard + Mender + Arcanist | clear | clears at 29.3 s; hero 120 HP |
+| Vanguard + Mender + Vanguard | fail or clear thinly | fails at 12.6 s |
+| Arcanist + Mender (no interrupt) | may clear, with meaningful pressure | clears at 21.4 s, hero 120 HP; comfortable |
+| Idle hero, any tested party | fail | **miss:** five fail; idle parties with a Mender echo, or two echoes, clear |
+
+The coordinator retuned the overrides after Slice 7b (see "Slice 7c" in the M3
+plan). Every pure-melee party fails, at echo levels 4, 5 and 7. Every party
+with an Arcanist clears, and so does every party with a Mender, because the
+Mender's Sling is a ranged weapon even though `range` is not one of the
+Mender's capability tags. Whether the Gallery should treat the Sling as a
+range answer, or the Mender's tags should change, is an open question for
+human playtesting. Rendered readability and roster-swapping playtests remain
+pending.
+
 ### Telling the player what is needed (decision G4)
 
 Testers must be able to see the need before they choose a job:
 
 - **Trial panel.** A top-centre panel is visible from run start:
-  `TRIAL · Bell Court · Lv 5` with an INTERRUPT / AREA / SUSTAIN chip each.
+  `TRIAL · Bell Court · Lv 5` or `TRIAL · Slinger Gallery · Lv 5`, with chips
+  for that Trial's needs (INTERRUPT / AREA / SUSTAIN or INTERRUPT / AREA / RANGE).
   A covered chip reads `✓ NEED` and the covering job; an uncovered chip reads
-  `✗ NEED` and `Missing`, so state never relies on colour alone. Coverage is the
-  echo's recorded job plus the active hero's job once chosen. The echo's final
-  recorded job counts from the start of the run, before the echo replays its
-  choice, because the panel is for planning the next hero.
+  `✗ NEED` and `Missing`, so state never relies on colour alone. Coverage uses
+  every roster echo's final recorded job in slot order plus the active hero's
+  job once chosen. Recorded jobs count from the start of the run, before echoes
+  replay their choices, because the panel is for planning the active hero's job. While resolution is
+  open, the fallen hero's job does not count toward the next Trial's coverage;
+  the roster screen updates its own coverage after each move.
 - **Job modal.** At level 3 each job button lists the uncovered needs it fills,
   e.g. `Fills Trial need: SUSTAIN ★`. Every option that fills a need gets the ★.
 - **Trial report.** For 10 seconds after a clear, or at the start of the next
   run after a failure, a panel lists casts landed and broken, damage taken per
-  enemy (hero and echo), healing done, whether the echo survived, and a
-  `Missing: SUSTAIN → Mender provides SUSTAIN` line for each uncovered need.
+  enemy (hero and echo totals), healing done, each echo's survival by slot and
+  job, and a `Missing: SUSTAIN → Mender provides SUSTAIN` line for each
+  uncovered need.
 
 ## Open Design Questions
 
-- Does an extended echo history persist immediately or only after surviving a
-  checkpoint?
-- Can the active hero issue focus, retreat, and formation commands to echoes?
-- Should roster resolution happen after every death or only after meaningful
-  progress?
+- Do repeated extension modals (up to three per level when both echoes are past
+  their records) cause fatigue? If so, move extension choices to the roster
+  screen; the domain call is the same.
 - What party size remains readable without turning the player into a raid
   manager?
 - How much procedural generation helps replayability without weakening
@@ -409,7 +554,7 @@ Testers must be able to see the need before they choose a job:
 - imitation learning or reinforcement learning;
 - a large procedural world;
 - persistent equipment;
-- more than one echo at a time;
+- more than two echoes at a time;
 - advanced job tiers;
 - online multiplayer; and
 - final art, audio, story, or balance.

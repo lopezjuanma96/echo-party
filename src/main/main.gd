@@ -8,6 +8,10 @@ const FOCUS_CLICK_RADIUS := 96.0
 ## always means "cooling down".
 const WEAPON_READY_FILL_COLOR := Color(0.72, 0.78, 0.88, 1.0)
 const TRIAL_REPORT_SECONDS := 10.0
+const CHOICE_PROMPT_HERO := "Combat is paused. Choose one permanent build step."
+const CHOICE_PROMPT_ECHO := "Combat is paused. This extends the echo's saved history."
+const RUN_NOTICE_SECONDS := 6.0
+const DEFAULT_SAVE_PATH := "user://echo_party_save.json"
 const TRIAL_CHIP_COVERED_TEXT := Color(0.72, 0.95, 0.8, 1.0)
 const TRIAL_CHIP_UNCOVERED_TEXT := Color(1.0, 0.72, 0.72, 1.0)
 const DEFAULT_KEY_BINDINGS := {
@@ -24,8 +28,10 @@ const DEFAULT_KEY_BINDINGS := {
 }
 const DEFAULT_MOUSE_BINDINGS := {
 	&"basic_attack": [MOUSE_BUTTON_LEFT],
-	&"weapon_previous": [MOUSE_BUTTON_WHEEL_UP],
-	&"weapon_next": [MOUSE_BUTTON_WHEEL_DOWN],
+	&"weapon_previous": [],
+	&"weapon_next": [],
+	&"address_previous": [MOUSE_BUTTON_WHEEL_UP],
+	&"address_next": [MOUSE_BUTTON_WHEEL_DOWN],
 	&"echo_focus": [MOUSE_BUTTON_RIGHT],
 }
 
@@ -45,6 +51,10 @@ const DEFAULT_MOUSE_BINDINGS := {
 @onready var echo_command_value: Label = $HUD/RunStatus/Content/EchoCommandValue
 @onready var echo_intent_value: Label = $HUD/RunStatus/Content/EchoIntentValue
 @onready var echo_cooldowns_value: Label = $HUD/RunStatus/Content/EchoCooldownsValue
+@onready var echo_2_value: Label = $HUD/RunStatus/Content/Echo2Value
+@onready var echo_2_command_value: Label = $HUD/RunStatus/Content/Echo2CommandValue
+@onready var echo_2_intent_value: Label = $HUD/RunStatus/Content/Echo2IntentValue
+@onready var echo_2_cooldowns_value: Label = $HUD/RunStatus/Content/Echo2CooldownsValue
 @onready var encounter_director: EncounterDirector = $EncounterDirector
 @onready var trial_panel: Control = $HUD/Trial
 @onready var trial_title: Label = $HUD/Trial/Margin/Content/Title
@@ -57,30 +67,59 @@ const DEFAULT_MOUSE_BINDINGS := {
 @onready var trial_report: Control = $HUD/TrialReport
 @onready var trial_report_title: Label = $HUD/TrialReport/Margin/Content/Title
 @onready var trial_report_body: Label = $HUD/TrialReport/Margin/Content/Body
+@onready var run_notice: Control = $HUD/RunNotice
+@onready var run_notice_text: Label = $HUD/RunNotice/Margin/Text
+@onready var resolution_screen: ResolutionScreen = $HUD/ResolutionScreen
 @onready var choice_modal: Control = $HUD/ChoiceModal
 @onready var choice_title: Label = $HUD/ChoiceModal/Center/Panel/Margin/Content/Title
+@onready var choice_prompt: Label = $HUD/ChoiceModal/Center/Panel/Margin/Content/Prompt
 @onready var choice_one_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceOne
 @onready var choice_two_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceTwo
 @onready var choice_three_button: Button = $HUD/ChoiceModal/Center/Panel/Margin/Content/ChoiceThree
 
 var progression := HeroProgression.new()
 var run_number := 1
-var latest_echo_record: HeroRecord
-var echo: EchoActor
-var focus_marker: Node2D
+var save_path := DEFAULT_SAVE_PATH
+var document := SaveDocument.new_default()
+var roster_store := SaveStore.new()
+var save_status := "new"
+var roster := Roster.new(RosterCapacity.BASE_PARTY_SLOTS, RosterCapacity.BASE_MEMORIAL_SLOTS)
+var party_slots := RosterCapacity.BASE_PARTY_SLOTS
+var run_anchors := 0
+var unlocks: Array[StringName] = []
+var trial_clears: Dictionary = {}
+var party_commander := PartyCommander.new()
+var echoes: Array[EchoActor] = []
+var focus_markers: Array[FocusTargetMarker] = []
+var latest_echo_record: HeroRecord:
+	get:
+		return roster.party[0] if not roster.party.is_empty() else null
+var echo: EchoActor:
+	get:
+		if echoes.is_empty() or not is_instance_valid(echoes[0]):
+			return null
+		return echoes[0]
+var focus_marker: Node2D:
+	get:
+		return focus_markers[0] if not focus_markers.is_empty() else null
 var _defeat_transition_pending := false
-var _echo_was_defeated := false
+var _clear_rewarded_this_run := false
+## The subject the open choice modal is asking about: {} when closed, otherwise
+## {"kind": &"hero"|&"echo", "slot": int (-1 for the hero), "level": int}.
+var _choice_subject := {}
+var _defeated_echo_slots := {}
 var _ability_feedback_time_left := 0.0
 var _weapon_cooling_fill: StyleBox
 var _weapon_ready_fill: StyleBoxFlat
 var _weapon_bar_shows_ready := false
 var _trial_report_time_left := 0.0
+var _run_notice_time_left := 0.0
 var _trial_chip_panels: Array[PanelContainer] = []
 var _trial_chip_labels: Array[Label] = []
 var _trial_chip_covered_style: StyleBoxFlat
 var _trial_chip_uncovered_style: StyleBoxFlat
-var _party_cache_record: HeroRecord
-var _party_cache_echo_job: StringName = &""
+var _party_cache_key := ""
+var _party_cache_echo_jobs: Array[StringName] = []
 
 
 func _ready() -> void:
@@ -91,6 +130,9 @@ func _ready() -> void:
 	_setup_choice_shortcuts()
 	_trial_chip_covered_style = _make_trial_chip_style(Color(0.1, 0.28, 0.18, 0.9), Color(0.36, 0.85, 0.54, 1.0))
 	_trial_chip_uncovered_style = _make_trial_chip_style(Color(0.3, 0.1, 0.12, 0.9), Color(0.9, 0.35, 0.35, 1.0))
+	resolution_screen.resolved.connect(_on_resolution_resolved)
+	_load_progress()
+	_apply_trial_rotation()
 	player.apply_progression(progression, true)
 	_on_player_health_changed(player.health, player.max_health)
 	_on_player_weapon_changed(player.get_selected_weapon_id())
@@ -98,10 +140,75 @@ func _ready() -> void:
 	_update_run_hud()
 	_update_ability_hud()
 	_update_trial_hud()
-	focus_marker = FOCUS_MARKER_SCRIPT.new() as Node2D
-	focus_marker.visible = false
-	focus_marker.z_index = 5
-	add_child(focus_marker)
+	if document.pending:
+		_restore_pending_resolution()
+	else:
+		_spawn_party()
+
+
+func _load_progress() -> void:
+	if save_path == DEFAULT_SAVE_PATH and DisplayServer.get_name() == "headless":
+		save_path = ""
+	roster_store = SaveStore.new(save_path)
+	var loaded := roster_store.load_document()
+	document = loaded["document"] as SaveDocument
+	save_status = String(loaded["status"])
+	unlocks = document.unlocks.duplicate()
+	trial_clears = document.trial_clears.duplicate(true)
+	run_number = document.next_hero_number
+	run_anchors = document.pending_anchors if document.pending else 0
+	roster = document.roster
+	var loaded_party_slots := RosterCapacity.party_slots(unlocks)
+	# A new memory/scenario document may carry a pre-ready fixture capacity.
+	party_slots = maxi(party_slots, loaded_party_slots) if save_status == "new" else loaded_party_slots
+	roster.set_capacity(party_slots, RosterCapacity.memorial_slots(unlocks))
+	if save_status == "corrupt" and roster_store.read_only:
+		_show_run_notice("Save unreadable and could not be backed up — progress this session will not be saved")
+	elif save_status == "corrupt":
+		_show_run_notice("Save unreadable — backed up to %s.corrupt" % save_path)
+	elif save_status == "too_new":
+		_show_run_notice("Save is from a newer version — progress this session will not be saved")
+
+
+func _restore_pending_resolution() -> void:
+	_defeat_transition_pending = true
+	resolution_screen.present(roster, {
+		"title": "ROSTER RESOLUTION RESTORED",
+		"summary": "The saved resolution is unchanged. Place or discard the candidate before starting.",
+		"anchors": run_anchors,
+		"encounter_id": encounter_director.encounter_id,
+		"unlocks": unlocks,
+		"trial_clears": _total_trial_clears(),
+	})
+	_update_trial_hud()
+	get_tree().paused = true
+
+
+func _save_progress(pending: bool) -> bool:
+	document.next_hero_number = run_number
+	document.unlocks = unlocks.duplicate()
+	document.trial_clears = trial_clears.duplicate(true)
+	document.roster = roster
+	document.pending = pending
+	document.pending_anchors = run_anchors if pending else 0
+	var saved := roster_store.save_document(document)
+	if not saved:
+		_show_run_notice("Save failed — progress this session may not be saved")
+	return saved
+
+
+## Names this run's Trial from the active hero's persisted number (odd → Bell
+## Court, even → Slinger Gallery). Runs before the Trial panel, job annotations,
+## coverage, and the roster screen's "Next Trial" line read the director.
+func _apply_trial_rotation() -> void:
+	encounter_director.encounter_id = EncounterCatalog.trial_for_hero(run_number)
+
+
+func _total_trial_clears() -> int:
+	var total := 0
+	for count: Variant in trial_clears.values():
+		total += int(count)
+	return total
 
 
 func _process(delta: float) -> void:
@@ -110,29 +217,36 @@ func _process(delta: float) -> void:
 	_update_ability_hud()
 	_update_run_hud()
 	_update_encounter(delta)
-	if is_instance_valid(echo):
-		focus_marker.set("target", echo.focused_target)
-	else:
-		focus_marker.set("target", null)
+	_update_run_notice(delta)
+	for slot in focus_markers.size():
+		var marker := focus_markers[slot]
+		var current_echo := echoes[slot] if slot < echoes.size() else null
+		marker.target = current_echo.focused_target if is_instance_valid(current_echo) else null
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed(&"echo_focus"):
+	if event.is_action_pressed(&"address_previous"):
+		party_commander.cycle_address(-1, roster.party.size())
+		_update_run_hud()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"address_next"):
+		party_commander.cycle_address(1, roster.party.size())
+		_update_run_hud()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(&"echo_focus"):
 		command_echo_focus_at(player.get_global_mouse_position())
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"echo_regroup") and is_instance_valid(echo):
-		echo.command_regroup()
+	elif event.is_action_pressed(&"echo_regroup"):
+		party_commander.regroup(echoes)
 		_update_run_hud()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(&"echo_hold") and is_instance_valid(echo):
-		echo.toggle_hold_position()
+	elif event.is_action_pressed(&"echo_hold"):
+		party_commander.toggle_hold(echoes)
 		_update_run_hud()
 		get_viewport().set_input_as_handled()
 
 
-func command_echo_focus_at(world_position: Vector2) -> bool:
-	if not is_instance_valid(echo):
-		return false
+func command_echo_focus_at(world_position: Vector2) -> int:
 	var best: Node2D
 	var best_distance_squared := FOCUS_CLICK_RADIUS * FOCUS_CLICK_RADIUS
 	var best_order := 9223372036854775807
@@ -154,7 +268,9 @@ func command_echo_focus_at(world_position: Vector2) -> bool:
 			best = candidate
 			best_distance_squared = distance_squared
 			best_order = order
-	return best != null and echo.command_focus(best)
+	var accepted := party_commander.focus(echoes, best)
+	_update_run_hud()
+	return accepted
 
 
 func _update_weapon_cooldown_hud() -> void:
@@ -221,32 +337,98 @@ func _on_player_defeated() -> void:
 	if _defeat_transition_pending:
 		return
 	_defeat_transition_pending = true
+	_choice_subject = {}
 	choice_modal.hide()
 	get_tree().paused = false
 	call_deferred(&"_start_next_run")
 
 
+## Death handler. Offers the fallen hero to the roster (only heroes who chose a
+## job qualify), tears the run down, then either opens the resolution screen or
+## begins the next run straight away.
 func _start_next_run() -> void:
+	if resolution_screen.visible:
+		return
+	_choice_subject = {}
 	choice_modal.hide()
 	get_tree().paused = false
-	latest_echo_record = HeroRecord.capture(
-		"hero-%d" % run_number,
-		"Hero %d" % run_number,
-		progression
-	)
+	var fallen_number := run_number
+	var offered := roster.offer_candidate(HeroRecord.capture(
+		"hero-%d" % fallen_number,
+		"Hero %d" % fallen_number,
+		progression.chosen_only()
+	))
+	var fallen_summary := _fallen_summary(fallen_number, offered)
 	_clear_transient_combat()
 	trial_report.hide()
-	# Before the echo is freed, so a failed court still reports whether it lived.
+	# Before the party is freed, so a failed court still reports whether it lived.
 	encounter_director.reset_for_new_run()
-	if is_instance_valid(echo):
-		echo.free()
-		echo = null
-
+	_clear_party()
 	run_number += 1
+	_apply_trial_rotation()
+	if roster.candidate == null and roster.memorial.is_empty():
+		_show_run_notice(fallen_summary)
+		_save_progress(false)
+		_begin_run()
+		return
+	_save_progress(true)
+	resolution_screen.present(roster, {
+		"title": "HERO %d HAS FALLEN" % fallen_number,
+		"summary": fallen_summary,
+		"anchors": run_anchors,
+		"encounter_id": encounter_director.encounter_id,
+		"unlocks": unlocks,
+		"trial_clears": _total_trial_clears(),
+	})
+	_update_trial_hud()
+	get_tree().paused = true
+
+
+func _fallen_summary(fallen_number: int, offered: bool) -> String:
+	if offered:
+		return "Hero %d fell as a %s at Level %d. Place them in the roster." % [
+			fallen_number,
+			_job_display_name(progression.get_job_id()),
+			progression.level,
+		]
+	return "Hero %d fell at Level %d without choosing a job, so they leave no echo." % [
+		fallen_number,
+		progression.level,
+	]
+
+
+func _on_resolution_resolved(anchors_left: int) -> void:
+	run_anchors = anchors_left
+	get_tree().paused = false
+	_save_progress(false)
+	_begin_run()
+
+
+## Test and scenario shortcut: places any candidate with
+## `RosterResolution.default_choice` and starts the run.
+func resolve_default() -> bool:
+	if not resolution_screen.visible:
+		return false
+	if roster.candidate != null:
+		var result := roster.move(
+			{"zone": Roster.ZONE_CANDIDATE, "index": 0},
+			RosterResolution.default_choice(roster)
+		)
+		if not bool(result["ok"]):
+			return false
+	return resolution_screen.start()
+
+
+func _begin_run() -> void:
+	# Unspent Anchors do not carry into the next run.
+	run_anchors = 0
+	_clear_rewarded_this_run = false
 	progression = HeroProgression.new()
-	_echo_was_defeated = false
+	_defeated_echo_slots.clear()
+	party_commander.address = PartyCommander.ADDRESS_ALL
 	player.reset_for_new_run(Vector2.ZERO)
-	_spawn_latest_echo()
+	player.suppress_combat_input_until_released()
+	_spawn_party()
 	_on_player_health_changed(player.health, player.max_health)
 	_on_player_weapon_changed(player.get_selected_weapon_id())
 	_update_progression_hud()
@@ -255,29 +437,75 @@ func _start_next_run() -> void:
 	_defeat_transition_pending = false
 
 
-func _spawn_latest_echo() -> void:
-	if latest_echo_record == null:
-		return
-	echo = ECHO_SCENE.instantiate() as EchoActor
-	if echo == null:
-		return
-	echo.position = player.position + Vector2(92.0, 0.0)
-	echo.active_hero_label = "Hero %d" % run_number
-	add_child(echo)
-	if not echo.configure(latest_echo_record, player):
-		echo.queue_free()
-		echo = null
-		return
-	echo.defeated.connect(_on_echo_defeated)
-	echo.progression_changed.connect(_update_run_hud)
+func _show_run_notice(text: String) -> void:
+	run_notice_text.text = text
+	run_notice.show()
+	_run_notice_time_left = RUN_NOTICE_SECONDS
 
 
-func _on_echo_defeated() -> void:
-	_echo_was_defeated = true
-	if is_instance_valid(echo):
-		echo.queue_free()
-	echo = null
+func _update_run_notice(delta: float) -> void:
+	if not run_notice.visible:
+		return
+	_run_notice_time_left -= delta
+	if _run_notice_time_left <= 0.0:
+		run_notice.hide()
+
+
+func _spawn_party() -> void:
+	_clear_party()
+	echoes.resize(roster.party.size())
+	focus_markers.resize(roster.party.size())
+	for slot in roster.party.size():
+		var current_echo := ECHO_SCENE.instantiate() as EchoActor
+		if current_echo == null:
+			continue
+		current_echo.name = "Echo%d" % (slot + 1)
+		current_echo.slot_index = slot
+		current_echo.position = player.position + EchoActor.FOLLOW_ANCHOR_OFFSETS[slot]
+		current_echo.active_hero_label = "Hero %d" % run_number
+		add_child(current_echo)
+		if not current_echo.configure(roster.party[slot], player):
+			current_echo.free()
+			continue
+		echoes[slot] = current_echo
+		current_echo.defeated.connect(_on_echo_defeated.bind(slot))
+		current_echo.progression_changed.connect(_update_run_hud)
+		var marker := FOCUS_MARKER_SCRIPT.new() as FocusTargetMarker
+		marker.slot_index = slot
+		marker.visible = false
+		marker.z_index = 5
+		add_child(marker)
+		focus_markers[slot] = marker
+
+
+func _clear_party() -> void:
+	for current_echo in echoes:
+		if is_instance_valid(current_echo):
+			current_echo.free()
+	for marker in focus_markers:
+		if is_instance_valid(marker):
+			marker.free()
+	echoes.clear()
+	focus_markers.clear()
+
+
+func _on_echo_defeated(slot_index: int = 0) -> void:
+	_defeated_echo_slots[slot_index] = true
+	if slot_index < 0 or slot_index >= echoes.size():
+		return
+	var defeated_echo := echoes[slot_index]
+	echoes[slot_index] = null
+	if is_instance_valid(defeated_echo):
+		defeated_echo.queue_free()
+	if slot_index < focus_markers.size() and is_instance_valid(focus_markers[slot_index]):
+		focus_markers[slot_index].target = null
+	if party_commander.address == slot_index:
+		party_commander.address = PartyCommander.ADDRESS_ALL
+	party_commander.on_echoes_changed(roster.party.size())
 	_update_run_hud()
+	if choice_modal.visible:
+		# A defeated echo keeps only the levels it already chose; its pending ones are dropped.
+		_show_next_choice_if_needed()
 
 
 func _clear_transient_combat() -> void:
@@ -307,20 +535,43 @@ func _on_enemy_defeated(experience_reward: int) -> void:
 	if _defeat_transition_pending:
 		return
 	progression.grant_experience(experience_reward)
-	if is_instance_valid(echo):
-		echo.grant_shared_experience(experience_reward)
+	for current_echo in echoes:
+		if is_instance_valid(current_echo) and not current_echo.is_defeated:
+			current_echo.grant_shared_experience(experience_reward)
 	_update_progression_hud()
 	_update_run_hud()
 	_show_next_choice_if_needed()
 
 
+## Pending choices in the order they are asked: the hero first, then each living
+## echo in slot order. Each entry is {"kind", "slot", "level"} for that subject's
+## next unchosen level.
+func _pending_choice_subjects() -> Array[Dictionary]:
+	var subjects: Array[Dictionary] = []
+	var hero_levels: Array[int] = progression.get_pending_choice_levels()
+	if not hero_levels.is_empty():
+		subjects.append({"kind": &"hero", "slot": -1, "level": hero_levels[0]})
+	for slot in echoes.size():
+		var current_echo := echoes[slot]
+		if not is_instance_valid(current_echo) or current_echo.is_defeated:
+			continue
+		var echo_levels := current_echo.get_pending_extension_levels()
+		if not echo_levels.is_empty():
+			subjects.append({"kind": &"echo", "slot": slot, "level": echo_levels[0]})
+	return subjects
+
+
 func _show_next_choice_if_needed() -> void:
-	var pending_levels: Array[int] = progression.get_pending_choice_levels()
-	if pending_levels.is_empty():
+	var subjects := _pending_choice_subjects()
+	if subjects.is_empty():
+		_choice_subject = {}
 		choice_modal.hide()
 		get_tree().paused = false
 		return
-	var choice_level := pending_levels[0]
+	_choice_subject = subjects[0]
+	var choice_level: int = _choice_subject["level"]
+	var is_echo_choice: bool = _choice_subject["kind"] == &"echo"
+	choice_prompt.text = CHOICE_PROMPT_ECHO if is_echo_choice else CHOICE_PROMPT_HERO
 	choice_three_button.visible = choice_level == HeroProgression.ADVANCEMENT_LEVEL
 	if choice_level == HeroProgression.ADVANCEMENT_LEVEL:
 		choice_title.text = "LEVEL %d — CHOOSE A JOB" % choice_level
@@ -345,10 +596,22 @@ func _show_next_choice_if_needed() -> void:
 		)
 	else:
 		choice_title.text = "LEVEL %d — CHOOSE AN ATTRIBUTE" % choice_level
+		if is_echo_choice:
+			choice_title.text = "%s · %s" % [_echo_choice_subject_text(int(_choice_subject["slot"])), choice_title.text]
 		choice_one_button.text = "[1] MIGHT\n+5 attack damage"
 		choice_two_button.text = "[2] VITALITY\n+20 max health and current health"
 	choice_modal.show()
 	get_tree().paused = true
+
+
+## "ECHO 1 · Hero 2 (Mender)": the echo's slot, record name, and recorded job.
+func _echo_choice_subject_text(slot: int) -> String:
+	var current_echo := echoes[slot]
+	return "ECHO %d · %s (%s)" % [
+		slot + 1,
+		current_echo.hero_record.display_name,
+		_job_display_name(current_echo.job_id),
+	]
 
 
 func _on_choice_one_pressed() -> void:
@@ -364,12 +627,21 @@ func _on_choice_three_pressed() -> void:
 
 
 func _apply_pending_choice(option_index: int) -> void:
-	var pending_levels: Array[int] = progression.get_pending_choice_levels()
-	if pending_levels.is_empty() or option_index < 0:
+	var subjects := _pending_choice_subjects()
+	if subjects.is_empty() or option_index < 0:
 		return
-	var choice_level := pending_levels[0]
+	var subject := subjects[0]
+	var choice_level: int = subject["level"]
 	var applied := false
-	if choice_level == HeroProgression.ADVANCEMENT_LEVEL:
+	if subject["kind"] == &"echo":
+		if option_index >= HeroProgression.ATTRIBUTE_IDS.size():
+			return
+		applied = _apply_echo_extension(
+			int(subject["slot"]),
+			choice_level,
+			HeroProgression.ATTRIBUTE_IDS[option_index]
+		)
+	elif choice_level == HeroProgression.ADVANCEMENT_LEVEL:
 		if option_index >= HeroProgression.JOB_IDS.size():
 			return
 		var job_id := HeroProgression.JOB_IDS[option_index]
@@ -384,10 +656,26 @@ func _apply_pending_choice(option_index: int) -> void:
 	if not applied:
 		return
 	player.suppress_combat_input_until_released()
-	player.apply_progression_stats(progression.get_max_health(), progression.get_attack_damage())
+	if subject["kind"] == &"hero":
+		player.apply_progression_stats(progression.get_max_health(), progression.get_attack_damage())
 	_update_progression_hud()
+	_update_run_hud()
 	_update_ability_hud()
 	_show_next_choice_if_needed()
+
+
+## Applies one extension choice and commits it to the roster at once (in memory):
+## the extended record replaces the old one, which is left untouched.
+func _apply_echo_extension(slot: int, choice_level: int, attribute_id: StringName) -> bool:
+	if slot < 0 or slot >= echoes.size() or not is_instance_valid(echoes[slot]):
+		return false
+	var current_echo := echoes[slot]
+	if not current_echo.apply_extension_choice(choice_level, attribute_id):
+		return false
+	var extended := current_echo.extension_record()
+	if extended != null and roster.replace_record(extended.runtime_id, extended):
+		current_echo.hero_record = extended
+	return true
 
 
 func _update_progression_hud() -> void:
@@ -402,41 +690,61 @@ func _update_progression_hud() -> void:
 
 func _update_run_hud() -> void:
 	run_value.text = "Run %d" % run_number
-	echo_command_value.text = "Command: —"
-	echo_intent_value.text = "Intent: —"
-	echo_cooldowns_value.text = "Cooldowns: —"
-	if latest_echo_record == null:
-		echo_value.text = "Echo: None"
+	_update_echo_slot(0, echo_value, echo_command_value, echo_intent_value, echo_cooldowns_value)
+	_update_echo_slot(1, echo_2_value, echo_2_command_value, echo_2_intent_value, echo_2_cooldowns_value)
+
+
+func _update_echo_slot(
+	slot: int,
+	value_label: Label,
+	command_label: Label,
+	intent_label: Label,
+	cooldowns_label: Label
+) -> void:
+	var unlocked := slot < party_slots
+	value_label.visible = unlocked
+	command_label.visible = unlocked
+	intent_label.visible = unlocked
+	cooldowns_label.visible = unlocked
+	if not unlocked:
 		return
-	if _echo_was_defeated:
-		echo_value.text = "Echo: Defeated"
-	elif is_instance_valid(echo):
-		echo_value.text = "Echo: %s · Level %d" % [
-			_job_display_name(echo.job_id),
-			echo.progression.level,
-		]
-		echo_command_value.text = "Command: %s · %d/%d HP" % [
-			String(echo.get_command_status()).capitalize(),
-			echo.health,
-			echo.max_health,
-		]
-		echo_intent_value.text = "Intent: %s" % echo.get_intent_summary()
-		echo_cooldowns_value.text = "Cooldowns: %s" % echo.get_cooldown_summary()
-	else:
-		echo_value.text = "Echo: Unavailable"
+	var prefix := "▶ " if party_commander.address == slot else ""
+	command_label.text = "Command: —"
+	intent_label.text = "Intent: —"
+	cooldowns_label.text = "Cooldowns: —"
+	if slot >= roster.party.size():
+		value_label.text = "%sEcho %d: empty slot" % [prefix, slot + 1]
+		return
+	if _defeated_echo_slots.has(slot):
+		value_label.text = "Echo %d: Defeated" % (slot + 1)
+		return
+	if slot >= echoes.size() or not is_instance_valid(echoes[slot]):
+		value_label.text = "%sEcho %d: Unavailable" % [prefix, slot + 1]
+		return
+	var current_echo := echoes[slot]
+	value_label.text = "%sEcho %d: %s · Level %d · %d/%d HP" % [
+		prefix,
+		slot + 1,
+		_job_display_name(current_echo.job_id),
+		current_echo.progression.level,
+		current_echo.health,
+		current_echo.max_health,
+	]
+	command_label.text = "Command: %s" % String(current_echo.get_command_status()).capitalize()
+	intent_label.text = "Intent: %s" % current_echo.get_intent_summary()
+	cooldowns_label.text = "Cooldowns: %s" % current_echo.get_cooldown_summary()
 
 
 func _party_job_ids() -> Array[StringName]:
-	if latest_echo_record != _party_cache_record:
-		_party_cache_record = latest_echo_record
-		_party_cache_echo_job = &""
-		if latest_echo_record != null:
-			var recorded := latest_echo_record.replay_progression()
-			if recorded != null:
-				_party_cache_echo_job = recorded.get_job_id()
-	var jobs: Array[StringName] = []
-	if not _party_cache_echo_job.is_empty():
-		jobs.append(_party_cache_echo_job)
+	# Runtime IDs identify the records; extension only appends attributes, so a
+	# record replaced under the same ID keeps its job.
+	var cache_key := "party:"
+	for record: HeroRecord in roster.party:
+		cache_key += record.runtime_id + "|"
+	if cache_key != _party_cache_key:
+		_party_cache_key = cache_key
+		_party_cache_echo_jobs = roster.party_job_ids()
+	var jobs := _party_cache_echo_jobs.duplicate()
 	jobs.append(progression.get_job_id())
 	return jobs
 
@@ -495,7 +803,10 @@ func _ensure_trial_chips(count: int) -> void:
 func _update_trial_hud() -> void:
 	var encounter_id := encounter_director.encounter_id
 	var needs := EncounterCatalog.get_needs(encounter_id)
-	var coverage := PartyNeeds.evaluate(_party_job_ids(), needs)
+	# During resolution the next hero is still unchosen; the fallen job must
+	# not cover the next Trial's needs on the panel behind the roster screen.
+	var jobs: Array[StringName] = roster.party_job_ids() if resolution_screen.visible else _party_job_ids()
+	var coverage := PartyNeeds.evaluate(jobs, needs)
 	var covered: Dictionary = coverage["covered"]
 	_ensure_trial_chips(needs.size())
 	for index in needs.size():
@@ -541,14 +852,14 @@ func _update_trial_hud() -> void:
 func _trial_status_text() -> String:
 	match encounter_director.state:
 		EncounterDirector.STATE_WARNING:
-			return "Court begins in %.1f s" % encounter_director.state_time_left
+			return "Trial begins in %.1f s" % encounter_director.state_time_left
 		EncounterDirector.STATE_ACTIVE:
-			return "Court in progress · %d s" % int(encounter_director.elapsed)
+			return "Trial in progress · %d s" % int(encounter_director.elapsed)
 		EncounterDirector.STATE_CLEARED:
-			return "Court cleared in %d s" % int(encounter_director.elapsed)
+			return "Trial cleared in %d s" % int(encounter_director.elapsed)
 	if not encounter_director.armed:
-		return "Court inactive"
-	return "Reach Lv %d to face the Court" % EncounterCatalog.get_trigger_level(
+		return "Trial inactive"
+	return "Reach Lv %d to face the Trial" % EncounterCatalog.get_trigger_level(
 		encounter_director.encounter_id
 	)
 
@@ -574,6 +885,38 @@ func _on_trial_report_ready(report: Dictionary) -> void:
 	trial_report_body.text = format_trial_report_body(report)
 	trial_report.show()
 	_trial_report_time_left = TRIAL_REPORT_SECONDS
+	if StringName(report.get("outcome", "")) != EncounterDirector.OUTCOME_CLEARED or _clear_rewarded_this_run:
+		return
+	var encounter_id := StringName(report.get("encounter_id", encounter_director.encounter_id))
+	if not EncounterCatalog.has_encounter(encounter_id):
+		return
+	_clear_rewarded_this_run = true
+	var clear_key := String(encounter_id)
+	trial_clears[clear_key] = int(trial_clears.get(clear_key, 0)) + 1
+	var earned := RosterCapacity.newly_earned(unlocks, _total_trial_clears())
+	for unlock_id: StringName in earned:
+		unlocks.append(unlock_id)
+	party_slots = RosterCapacity.party_slots(unlocks)
+	roster.set_capacity(party_slots, RosterCapacity.memorial_slots(unlocks))
+	run_anchors = mini(run_anchors + 1, 1)
+	var toast_parts: Array[String] = []
+	for unlock_id: StringName in earned:
+		toast_parts.append("Unlocked: %s" % _unlock_label(unlock_id))
+	toast_parts.append("Echo Anchor found")
+	_show_run_notice(" · ".join(toast_parts))
+	_update_run_hud()
+	_save_progress(false)
+
+
+func _unlock_label(unlock_id: StringName) -> String:
+	return "Party slot 2" if unlock_id == &"party_slot_2" else "Memorial slot 2"
+
+
+func debug_clear_encounter() -> bool:
+	if encounter_director.state == EncounterDirector.STATE_CLEARED:
+		return false
+	encounter_director._clear()
+	return encounter_director.state == EncounterDirector.STATE_CLEARED
 
 
 static func format_trial_report_title(report: Dictionary) -> String:
@@ -606,7 +949,15 @@ static func format_trial_report_body(report: Dictionary) -> String:
 				detail += " · Echo %d" % roundi(float(entry["echo"]))
 			lines.append("  %s — %s" % [enemy_id.capitalize(), detail])
 	lines.append("Healing done: %d" % roundi(float(report.get("healing_done", 0.0))))
-	if not had_echo:
+	var echo_entries: Array = report.get("echoes", [])
+	if not echo_entries.is_empty():
+		for echo_entry: Dictionary in echo_entries:
+			lines.append("Echo %d %s: %s" % [
+				int(echo_entry["slot"]),
+				JobCatalog.get_display_name(StringName(echo_entry["job_id"])),
+				"survived" if bool(echo_entry["survived"]) else "defeated",
+			])
+	elif not had_echo:
 		lines.append("Echo: none")
 	else:
 		lines.append("Echo: %s" % ("survived" if bool(report.get("echo_survived", false)) else "defeated"))
@@ -626,43 +977,71 @@ func apply_scenario(
 	player_job: StringName,
 	echo_job: StringName,
 	level: int,
-	encounter_id: StringName
+	encounter_id: StringName,
+	echo_jobs: Array[StringName] = [],
+	echo_levels: Array[int] = [],
+	echo_start_levels: Array[int] = []
 ) -> bool:
 	if not encounter_id.is_empty() and not EncounterCatalog.has_encounter(encounter_id):
+		return false
+	var jobs: Array[StringName] = echo_jobs.duplicate()
+	if jobs.is_empty() and not echo_job.is_empty():
+		jobs.append(echo_job)
+	if (
+		jobs.size() > party_slots
+		or jobs.size() > EchoActor.FOLLOW_ANCHOR_OFFSETS.size()
+		or (not echo_levels.is_empty() and echo_levels.size() != jobs.size())
+		or (not echo_start_levels.is_empty() and echo_start_levels.size() != jobs.size())
+	):
 		return false
 	var player_progression := _build_scenario_progression(player_job, level)
 	if player_progression == null:
 		return false
-	var echo_progression: HeroProgression
-	if not echo_job.is_empty():
-		echo_progression = _build_scenario_progression(echo_job, level)
+	var echo_progressions: Array[HeroProgression] = []
+	for index in jobs.size():
+		var echo_level := echo_levels[index] if not echo_levels.is_empty() else level
+		var echo_progression := _build_scenario_progression(jobs[index], echo_level)
 		if echo_progression == null:
 			return false
+		echo_progressions.append(echo_progression)
 
+	_choice_subject = {}
 	choice_modal.hide()
 	get_tree().paused = false
 	encounter_director.reset_for_new_run()
 	trial_report.hide()
+	_clear_party()
 	progression = player_progression
-	run_number = 1
+	run_number = document.next_hero_number
+	run_anchors = 0
+	document.pending = false
+	document.pending_anchors = 0
+	_clear_rewarded_this_run = false
 	_defeat_transition_pending = false
-	_echo_was_defeated = false
+	_defeated_echo_slots.clear()
 	_ability_feedback_time_left = 0.0
+	party_commander.address = PartyCommander.ADDRESS_ALL
+	party_commander.last_command = {}
+	_party_cache_key = ""
+	roster = Roster.new(party_slots, RosterCapacity.BASE_MEMORIAL_SLOTS)
 	player.reset_for_new_run(Vector2.ZERO)
 	player.apply_progression(progression, true)
-	if is_instance_valid(echo):
-		echo.free()
-		echo = null
-	latest_echo_record = null
-	if echo_progression != null:
-		latest_echo_record = HeroRecord.capture(
-			"scenario-echo",
-			"%s Echo" % JobCatalog.get_display_name(echo_job),
-			echo_progression
-		)
-		_spawn_latest_echo()
-		if is_instance_valid(echo):
-			echo.grant_shared_experience(echo_progression.experience)
+	for index in echo_progressions.size():
+		roster.party.append(HeroRecord.capture(
+			"scenario-echo-%d" % (index + 1),
+			"Hero %d" % (index + 1),
+			echo_progressions[index]
+		))
+	_spawn_party()
+	for index in echoes.size():
+		if not is_instance_valid(echoes[index]):
+			continue
+		# Echoes start replayed to their record unless the scenario starts them lower,
+		# so a record can sit above the live level and leave room to extend.
+		var start_experience := echo_progressions[index].experience
+		if not echo_start_levels.is_empty():
+			start_experience = maxi(echo_start_levels[index] - 1, 0) * HeroProgression.XP_PER_LEVEL
+		echoes[index].grant_shared_experience(start_experience)
 	_on_player_health_changed(player.health, player.max_health)
 	_on_player_weapon_changed(player.get_selected_weapon_id())
 	_update_progression_hud()
@@ -671,11 +1050,86 @@ func apply_scenario(
 	# Scenarios are isolated: an un-armed director keeps level-5 scenarios from
 	# starting the court on their own.
 	if encounter_id.is_empty():
+		_apply_trial_rotation()
 		encounter_director.disarm()
 	elif not encounter_director.start_encounter(_party_job_ids(), encounter_id):
 		return false
 	_update_trial_hud()
 	return true
+
+
+func apply_resolution_scenario(
+	fallen_job: StringName,
+	fallen_level: int,
+	party_jobs: Array[StringName],
+	party_levels: Array[int],
+	memorial_jobs: Array[StringName],
+	memorial_slot_count: int,
+	anchor_count: int,
+	roster_level: int
+) -> bool:
+	if (
+		party_jobs.size() > party_slots
+		or party_jobs.size() > EchoActor.FOLLOW_ANCHOR_OFFSETS.size()
+		or memorial_jobs.size() > memorial_slot_count
+		or (not party_levels.is_empty() and party_levels.size() != party_jobs.size())
+		or memorial_slot_count < 0
+		or anchor_count < 0
+	):
+		return false
+	var fallen_progression := _build_scenario_progression(fallen_job, fallen_level)
+	if fallen_progression == null:
+		return false
+	var scenario_roster := Roster.new(party_slots, memorial_slot_count)
+	for index in party_jobs.size():
+		var party_level := party_levels[index] if not party_levels.is_empty() else roster_level
+		var party_progression := _build_scenario_progression(party_jobs[index], party_level)
+		var party_record := HeroRecord.capture(
+			"hero-%d" % (index + 1),
+			"Hero %d" % (index + 1),
+			party_progression
+		) if party_progression != null else null
+		if party_record == null:
+			return false
+		scenario_roster.party.append(party_record)
+	for index in memorial_jobs.size():
+		var memorial_progression := _build_scenario_progression(memorial_jobs[index], roster_level)
+		var memorial_record := HeroRecord.capture(
+			"hero-%d" % (party_jobs.size() + index + 1),
+			"Hero %d" % (party_jobs.size() + index + 1),
+			memorial_progression
+		) if memorial_progression != null else null
+		if memorial_record == null:
+			return false
+		scenario_roster.memorial.append(memorial_record)
+
+	choice_modal.hide()
+	resolution_screen.hide()
+	encounter_director.reset_for_new_run()
+	trial_report.hide()
+	_clear_party()
+	roster = scenario_roster
+	progression = fallen_progression
+	# Stored heroes are Hero 1..N, so the fallen hero is the next number.
+	run_number = maxi(document.next_hero_number, party_jobs.size() + memorial_jobs.size() + 1)
+	run_anchors = anchor_count
+	_clear_rewarded_this_run = false
+	_sync_unlocks_to_capacity(memorial_slot_count)
+	_defeat_transition_pending = true
+	_party_cache_key = ""
+	party_commander.address = PartyCommander.ADDRESS_ALL
+	party_commander.last_command = {}
+	_start_next_run()
+	return true
+
+
+func _sync_unlocks_to_capacity(memorial_slot_count: int) -> void:
+	unlocks.clear()
+	if party_slots > RosterCapacity.BASE_PARTY_SLOTS:
+		unlocks.append(&"party_slot_2")
+	if memorial_slot_count > RosterCapacity.BASE_MEMORIAL_SLOTS:
+		unlocks.append(&"memorial_slot_2")
+	trial_clears = {}
 
 
 func _build_scenario_progression(job_id: StringName, level: int) -> HeroProgression:
@@ -701,13 +1155,73 @@ func _build_scenario_progression(job_id: StringName, level: int) -> HeroProgress
 	return scenario_progression
 
 
+## Plain-typed view of the choice queue: {"subject": "hero"|"echo", "slot": int
+## (0 for the hero, 1-based for echoes), "level": int, "pending": int}.
+func _pending_choice_subject_states() -> Array[Dictionary]:
+	var states: Array[Dictionary] = []
+	for subject in _pending_choice_subjects():
+		var is_echo: bool = subject["kind"] == &"echo"
+		var pending_count := (
+			echoes[int(subject["slot"])].get_pending_extension_levels().size()
+			if is_echo
+			else progression.get_pending_choice_levels().size()
+		)
+		states.append({
+			"subject": "echo" if is_echo else "hero",
+			"slot": int(subject["slot"]) + 1 if is_echo else 0,
+			"level": int(subject["level"]),
+			"pending": pending_count,
+		})
+	return states
+
+
 func _mcp_state() -> Dictionary:
+	var echo_states: Array[Dictionary] = []
+	for slot in echoes.size():
+		if not is_instance_valid(echoes[slot]):
+			continue
+		var echo_state := echoes[slot]._mcp_state()
+		echo_state["slot"] = slot + 1
+		echo_states.append(echo_state)
+	var roster_party: Array[Dictionary] = []
+	for record in roster.party:
+		var recorded := record.replay_progression()
+		roster_party.append({
+			"id": record.runtime_id,
+			"name": record.display_name,
+			"job_id": String(recorded.get_job_id()),
+			"level": recorded.level,
+		})
+	var roster_memorial: Array[Dictionary] = []
+	for record in roster.memorial:
+		var memorial_recorded := record.replay_progression()
+		roster_memorial.append({
+			"id": record.runtime_id,
+			"name": record.display_name,
+			"job_id": String(memorial_recorded.get_job_id()),
+			"level": memorial_recorded.level,
+		})
+	var unlock_values: Array[String] = []
+	for unlock_id: StringName in unlocks:
+		unlock_values.append(String(unlock_id))
+	var clear_values: Dictionary = {}
+	for encounter_id: Variant in trial_clears:
+		clear_values[String(encounter_id)] = int(trial_clears[encounter_id])
 	return {
 		"run_number": run_number,
+		"save_path": save_path,
+		"save_status": save_status,
+		"save_read_only": roster_store.read_only,
+		"unlocks": unlock_values,
+		"trial_clears": clear_values,
+		"next_hero_number": document.next_hero_number,
+		"pending_saved": document.pending,
 		"level": progression.level,
 		"experience": progression.experience,
 		"job_id": String(progression.get_job_id()),
 		"pending_choice_levels": progression.get_pending_choice_levels(),
+		"pending_choice_subjects": _pending_choice_subject_states(),
+		"choice_title_text": choice_title.text,
 		"choice_modal_visible": choice_modal.visible,
 		"choice_three_visible": choice_three_button.visible,
 		"ability_hud_visible": ability_value.visible,
@@ -717,6 +1231,18 @@ func _mcp_state() -> Dictionary:
 		"echo_intent_hud_text": echo_intent_value.text,
 		"echo_cooldowns_hud_text": echo_cooldowns_value.text,
 		"has_echo": is_instance_valid(echo),
+		"echo_count": echo_states.size(),
+		"echoes": echo_states,
+		"address": party_commander.address,
+		"address_label": party_commander.address_label(echoes),
+		"last_command": party_commander.last_command.duplicate(true),
+		"party_slots": party_slots,
+		"roster_party": roster_party,
+		"roster_memorial": roster_memorial,
+		"run_anchors": run_anchors,
+		"resolution": resolution_screen._mcp_state(),
+		"run_notice_visible": run_notice.visible,
+		"run_notice_text": run_notice_text.text,
 		"paused": get_tree().paused,
 		"director_state": String(encounter_director.state),
 		"director": encounter_director._mcp_state(),

@@ -1,0 +1,83 @@
+{
+	"memorial": [
+		{
+			"display_name": "Hero 2",
+			"progression": {
+				"choices": [
+					{
+						"attribute_id": "might",
+						"level": 2
+					},
+					{
+						"job_id": "mender",
+						"level": 3
+					}
+				],
+				"experience": 200,
+				"level": 3
+			},
+			"runtime_id": "hero-2"
+		}
+	],
+	"next_hero_number": 5,
+	"pending": {
+		"anchors": 1,
+		"candidate": {
+			"display_name": "Hero 4",
+			"progression": {
+				"choices": [
+					{
+						"attribute_id": "might",
+						"level": 2
+					},
+					{
+						"job_id": "arcanist",
+						"level": 3
+					},
+					{
+						"attribute_id": "might",
+						"level": 4
+					},
+					{
+						"attribute_id": "might",
+						"level": 5
+					}
+				],
+				"experience": 400,
+				"level": 5
+			},
+			"runtime_id": "hero-4"
+		}
+	},
+	"roster": [
+		{
+			"display_name": "Hero 3",
+			"progression": {
+				"choices": [
+					{
+						"attribute_id": "might",
+						"level": 2
+					},
+					{
+						"job_id": "vanguard",
+						"level": 3
+					},
+					{
+						"attribute_id": "might",
+						"level": 4
+					}
+				],
+				"experience": 300,
+				"level": 4
+			},
+			"runtime_id": "hero-3"
+		}
+	],
+	"trial_clears": {
+		"bell_court": 2
+	},
+	"unlocks": [
+		"party_slot_2"
+	],
+	"version": 1
+}

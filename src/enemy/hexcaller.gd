@@ -24,6 +24,9 @@ const CIRCLE_COLOR := Color("c2409a")
 @onready var telegraph: Telegraph = $Telegraph
 @onready var interrupt_label: Label = $InterruptLabel
 
+@export var flee_distance := FLEE_DISTANCE
+@export var keep_distance := APPROACH_DISTANCE
+
 var state := &"kite"
 var state_time_left := 0.0
 var cast_cooldown_left := FIRST_CAST_DELAY
@@ -72,9 +75,9 @@ func _tick_kite() -> void:
 	var distance := to_target.length()
 	if to_target.is_zero_approx():
 		return
-	if distance < FLEE_DISTANCE:
+	if distance < flee_distance:
 		velocity = -to_target.normalized() * move_speed
-	elif distance > APPROACH_DISTANCE:
+	elif distance > keep_distance:
 		velocity = to_target.normalized() * move_speed
 
 
@@ -186,6 +189,9 @@ func _mcp_state() -> Dictionary:
 		"pos_y": global_position.y,
 		"health": health,
 		"max_health": max_health,
+		"move_speed": move_speed,
+		"flee_distance": flee_distance,
+		"keep_distance": keep_distance,
 		"state": "spawn_grace" if spawn_grace > 0.0 else ("defeated" if is_defeated else String(state)),
 		"state_time_left": spawn_grace if spawn_grace > 0.0 else state_time_left,
 		"cast_progress": get_cast_progress(),

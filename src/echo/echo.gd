@@ -3,8 +3,15 @@ extends HeroActor
 
 
 signal progression_changed
+## Emitted when XP carries the echo past its recorded history and it needs the
+## player to author its next attribute.
+signal extension_pending(echo: EchoActor)
 
 const DISPLAY_INTENT_DWELL := 0.25
+const FOLLOW_ANCHOR_OFFSETS: Array[Vector2] = [Vector2(92.0, 0.0), Vector2(-92.0, 0.0)]
+const LABEL_OFFSET_TOP := -75.0
+const LABEL_OFFSET_BOTTOM := -27.0
+const LABEL_SLOT_RISE := 30.0
 const INTENT_LABELS := {
 	&"attack": "Attack",
 	&"approach": "Approach",
@@ -29,6 +36,7 @@ const INTENT_LABELS := {
 
 var active_hero: Node2D
 var hero_record: HeroRecord
+var slot_index := 0
 var progression := HeroProgression.new()
 var current_target: Node2D
 var intent_target: Node2D
@@ -70,21 +78,22 @@ func configure(record: HeroRecord, new_active_hero: Node2D) -> bool:
 	return true
 
 
+## Grants XP without a cap. Levels covered by the record replay its choices; levels
+## past the record become pending extension levels the player must author.
 func grant_shared_experience(amount: int) -> int:
-	if amount <= 0 or progression.level >= _replay_level_limit:
+	if amount <= 0:
 		return 0
-	var maximum_experience := (_replay_level_limit - 1) * HeroProgression.XP_PER_LEVEL
-	var granted_amount := mini(amount, maximum_experience - progression.experience)
-	var levels_gained := progression.grant_experience(granted_amount)
+	var levels_gained := progression.grant_experience(amount)
+	var job_replayed := false
 	for choice_level in progression.get_pending_choice_levels():
 		var choice_index := choice_level - 2
-		if choice_index < 0 or choice_index >= _recorded_choices.size():
-			push_error("Missing recorded choice at level %d" % choice_level)
+		if choice_index >= _recorded_choices.size():
 			break
 		var choice := _recorded_choices[choice_index]
 		var applied := false
 		if choice.has("job_id"):
 			applied = progression.apply_job_choice(choice_level, StringName(choice["job_id"]))
+			job_replayed = job_replayed or applied
 		elif choice.has("attribute_id"):
 			applied = progression.apply_attribute_choice(
 				choice_level,
@@ -95,10 +104,69 @@ func grant_shared_experience(amount: int) -> int:
 			break
 	if levels_gained > 0:
 		job_id = progression.get_job_id()
-		apply_progression(progression)
+		_apply_progression_without_loadout_reset(job_replayed)
 		_update_label()
 		progression_changed.emit()
+		if not get_pending_extension_levels().is_empty():
+			extension_pending.emit(self)
 	return levels_gained
+
+
+## Levels past the recorded history that still need an attribute choice, in order.
+## A level-3 gap (a record with no job) is not extendable: records that become
+## echoes always chose a job, so it is reported as nothing pending.
+func get_pending_extension_levels() -> Array[int]:
+	var pending: Array[int] = []
+	for choice_level in progression.get_pending_choice_levels():
+		if choice_level - 2 < _recorded_choices.size():
+			continue
+		if choice_level == HeroProgression.ADVANCEMENT_LEVEL:
+			return []
+		pending.append(choice_level)
+	return pending
+
+
+## Authors the next extension level. Only the first pending level accepts a choice,
+## and only attributes: the echo already has a job.
+func apply_extension_choice(choice_level: int, attribute_id: StringName) -> bool:
+	if is_defeated:
+		return false
+	var pending := get_pending_extension_levels()
+	if pending.is_empty() or pending[0] != choice_level:
+		return false
+	if not progression.apply_attribute_choice(choice_level, attribute_id):
+		return false
+	_apply_progression_without_loadout_reset(false)
+	_update_label()
+	progression_changed.emit()
+	return true
+
+
+## Refreshes stats after a level change. Only a replayed job choice rebuilds the
+## loadout: doing it on every level-up would reset cooldowns and the Mend timer.
+func _apply_progression_without_loadout_reset(rebuild_loadout: bool) -> void:
+	if rebuild_loadout:
+		apply_progression(progression)
+	else:
+		apply_progression_stats(progression.get_max_health(), progression.get_attack_damage())
+
+
+## The record this echo would leave behind: its source record plus the levels it
+## chose this run, or null when nothing was extended. Levels the echo reached but
+## never chose (still pending) are not recorded, so a fallen echo keeps exactly
+## what the player authored. The source record is never mutated.
+func extension_record() -> HeroRecord:
+	if hero_record == null:
+		return null
+	var trimmed := progression.chosen_only()
+	return hero_record.extended_with(trimmed) if trimmed != null else null
+
+
+func get_record_level() -> int:
+	if hero_record == null:
+		return 0
+	var recorded := hero_record.replay_progression()
+	return recorded.level if recorded != null else 0
 
 
 func get_replay_level_limit() -> int:
@@ -138,7 +206,7 @@ func get_command_status() -> StringName:
 	return &"follow"
 
 
-func _is_valid_focus_target(target: Node2D) -> bool:
+func _is_valid_focus_target(target: Variant) -> bool:
 	return (
 		is_instance_valid(target)
 		and not target.is_queued_for_deletion()
@@ -150,14 +218,18 @@ func _is_valid_focus_target(target: Node2D) -> bool:
 
 func _update_label() -> void:
 	var label := get_node_or_null("EchoLabel") as Label
-	if label != null:
-		label.text = "ECHO · %s · Lv %d\n%d / %d HP · %s" % [
-			hero_record.display_name,
-			progression.level,
-			health,
-			max_health,
-			String(get_command_status()).to_upper(),
-		]
+	if label == null:
+		return
+	# Kept short so two nearby echoes stay readable: name and HP live in the HUD
+	# row and the overlay's health bar. Higher slots sit one label height higher.
+	var command := get_command_status()
+	var pending_marker := "*" if not get_pending_extension_levels().is_empty() else ""
+	label.text = "ECHO %d · Lv %d%s" % [slot_index + 1, progression.level, pending_marker]
+	if command != &"follow":
+		label.text += "\n%s" % String(command).to_upper()
+	var rise := LABEL_SLOT_RISE * float(slot_index)
+	label.offset_top = LABEL_OFFSET_TOP - rise
+	label.offset_bottom = LABEL_OFFSET_BOTTOM - rise
 
 
 func _physics_process(delta: float) -> void:
@@ -208,12 +280,12 @@ func _regroup_with_active_hero() -> void:
 	if not is_instance_valid(active_hero):
 		is_regrouping = false
 		return
-	var to_hero := active_hero.global_position - global_position
-	if to_hero.length() <= follow_distance * 0.8:
+	var to_anchor := _follow_anchor() - global_position
+	if to_anchor.length() <= follow_distance * 0.8:
 		is_regrouping = false
 		current_intent = &"idle"
 		return
-	velocity = to_hero.normalized() * move_speed
+	velocity = to_anchor.normalized() * move_speed
 
 
 func choose_target(candidates: Array[Node]) -> Node2D:
@@ -308,10 +380,15 @@ func _follow_active_hero() -> void:
 	current_intent = &"idle"
 	if not is_instance_valid(active_hero):
 		return
-	var to_hero := active_hero.global_position - global_position
-	if to_hero.length() > follow_distance:
+	var to_anchor := _follow_anchor() - global_position
+	if to_anchor.length() > follow_distance:
 		current_intent = &"follow"
-		velocity = to_hero.normalized() * move_speed
+		velocity = to_anchor.normalized() * move_speed
+
+
+func _follow_anchor() -> Vector2:
+	var offset := FOLLOW_ANCHOR_OFFSETS[mini(slot_index, FOLLOW_ANCHOR_OFFSETS.size() - 1)]
+	return active_hero.global_position + offset
 
 
 func _fight_target() -> void:
@@ -505,6 +582,8 @@ func _mcp_state() -> Dictionary:
 		"ability_cooldown_left": ability_cooldown_left,
 		"total_healing_done": total_healing_done,
 		"level": progression.level,
+		"record_level": get_record_level(),
+		"pending_extension_levels": get_pending_extension_levels(),
 		"current_intent": String(current_intent),
 		"display_intent": String(_display_intent),
 		"intent_summary": get_intent_summary(),
@@ -516,7 +595,7 @@ func _mcp_state() -> Dictionary:
 		"command_status": String(get_command_status()),
 		"focused_target": String(focused_target.name) if is_instance_valid(focused_target) else "",
 		"interrupt_weapon_id": String(get_interrupt_weapon_id()),
-		"target_is_casting": _is_casting(current_target),
+		"target_is_casting": is_instance_valid(current_target) and _is_casting(current_target),
 		"mend_threshold": mend_threshold,
 		"support_leash": support_leash,
 		"is_defeated": is_defeated,

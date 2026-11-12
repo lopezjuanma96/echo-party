@@ -16,9 +16,17 @@ func _init() -> void:
 func _run_tests() -> void:
 	_test_party_needs_coverage()
 	_test_catalog_data()
+	_test_gallery_catalog_and_rotation()
+	_test_gallery_spawn_layout()
+	_test_gallery_director()
+	_test_enemy_overrides()
+	_test_gallery_wave_occupancy()
+	_test_gallery_scenarios()
+	_test_gallery_main_flow()
 	_test_trigger_conditions()
 	_test_warning_phase_pauses_spawner()
 	_test_wave_timeline()
+	_test_large_party_adjustment()
 	_test_clear_resumes_spawner()
 	_test_spawn_order_and_determinism()
 	_test_counter_attribution()
@@ -28,7 +36,7 @@ func _run_tests() -> void:
 	_test_scenario_hook_and_main_trigger()
 
 	if _failures.is_empty():
-		print("Encounter director, party needs, and Trial HUD tests passed (12 cases).")
+		print("Encounter director, party needs, and Trial HUD tests passed (22 cases).")
 		quit(0)
 	else:
 		for failure in _failures:
@@ -105,7 +113,8 @@ func _test_catalog_data() -> void:
 		and is_equal_approx(float(data["warning_duration"]), 3.0)
 		and is_equal_approx(float(data["spawn_grace"]), 1.0)
 		and int(data["seed"]) == 7117
-		and EncounterCatalog.get_total_enemy_count(&"bell_court") == 11,
+		and EncounterCatalog.get_total_enemy_count(&"bell_court") == 11
+		and not data.has("enemy_overrides"),
 		"bell_court catalog entry matches the design"
 	)
 	var times: Array[float] = []
@@ -117,6 +126,312 @@ func _test_catalog_data() -> void:
 			not PartyNeeds.providers(need).is_empty(),
 			"every bell_court need has a choosable provider job: %s" % need
 		)
+
+
+func _test_gallery_catalog_and_rotation() -> void:
+	var data := EncounterCatalog.get_encounter(&"slinger_gallery")
+	var needs := EncounterCatalog.get_needs(&"slinger_gallery")
+	_expect(
+		EncounterCatalog.get_display_name(&"slinger_gallery") == "Slinger Gallery"
+		and EncounterCatalog.get_trigger_level(&"slinger_gallery") == 5
+		and needs == [&"interrupt", &"area", &"range"]
+		and int(data["seed"]) == 9203
+		and is_equal_approx(float(data["warning_duration"]), 3.0)
+		and is_equal_approx(float(data["spawn_grace"]), 1.0)
+		and is_equal_approx(float(data["pack_jitter_radius"]), 40.0)
+		and EncounterCatalog.get_total_enemy_count(&"slinger_gallery") == 13
+		and int(data["large_party"]["min_echoes"]) == 2
+		and is_equal_approx(float(data["large_party"]["enemy_health_multiplier"]), 1.25),
+		"Gallery has its own seed, level-5 trigger, warning, grace, jitter and role needs"
+	)
+	_expect(
+		PartyNeeds.uncovered([&"vanguard", &"arcanist"], needs).is_empty()
+		and PartyNeeds.uncovered([&"arcanist", &"vanguard"], needs).is_empty()
+		and PartyNeeds.uncovered([&"vanguard", &"mender"], needs) == [&"range"]
+		and PartyNeeds.uncovered([&"vanguard", &"vanguard"], needs) == [&"range"]
+		and PartyNeeds.uncovered([&"arcanist", &"mender"], needs) == [&"interrupt"],
+		"Gallery coverage rewards Vanguard + Arcanist and identifies missing range/interrupt"
+	)
+	var times: Array[float] = []
+	var counts: Array[int] = []
+	for wave: Dictionary in data["waves"]:
+		times.append(float(wave["time"]))
+		var count := 0
+		for spawn: Dictionary in wave["spawns"]:
+			count += int(spawn["count"])
+		counts.append(count)
+	_expect(times == [0.0, 8.0, 18.0] and counts == [5, 4, 4], "Gallery has five opening enemies and two groups of four due at 8s and 18s")
+	for hero_number in range(1, 9):
+		var expected := &"bell_court" if hero_number % 2 == 1 else &"slinger_gallery"
+		_expect(EncounterCatalog.trial_for_hero(hero_number) == expected, "Trial alternates for hero %d" % hero_number)
+	_expect(
+		EncounterCatalog.trial_for_hero(0) == &"bell_court"
+		and EncounterCatalog.trial_for_hero(-2) == &"bell_court",
+		"invalid hero numbers use the first Trial"
+	)
+
+
+func _test_gallery_spawn_layout() -> void:
+	# Conservative bounds include body + 40px, the Hexcaller's break ring and
+	# cast bar, and the ENTIRE pack jitter disk (not just this seed's samples).
+	var hud_rects: Array[Rect2] = [
+		Rect2(20, 20, 403, 227), Rect2(20, 259, 403, 181),
+		Rect2(20, 452, 192, 98), Rect2(440, 20, 400, 115),
+		Rect2(980, 20, 280, 84), Rect2(940, 116, 320, 146),
+		Rect2(530, 570, 220, 130), Rect2(400, 514, 480, 46),
+	]
+	var viewport := Rect2(0, 0, 1280, 720)
+	var data := EncounterCatalog.get_encounter(&"slinger_gallery")
+	var waves: Array = data["waves"].duplicate(true)
+	waves.append_array(data["large_party"]["extra_waves"])
+	var spawns: Array[Dictionary] = []
+	for wave: Dictionary in waves:
+		for spawn: Dictionary in wave["spawns"]:
+			var half_size := Vector2(76, 86) if spawn["enemy_id"] == &"hexcaller" else Vector2(56, 56)
+			if int(spawn["count"]) > 1:
+				half_size += Vector2.ONE * float(data["pack_jitter_radius"])
+			if spawn["enemy_id"] in [&"slinger", &"hexcaller"]:
+				var position: Vector2 = spawn["position"]
+				var jitter := float(data["pack_jitter_radius"]) if int(spawn["count"]) > 1 else 0.0
+				_expect(position.length() - jitter >= 320.0, "Gallery ranged spawns stay at least 320px from centre including jitter")
+			var screen_position: Vector2 = spawn["position"] + Vector2(640, 360)
+			var bounds := Rect2(screen_position - half_size, half_size * 2.0)
+			if spawn["enemy_id"] == &"hexcaller":
+				# The bar extends upward; the lower edge only needs the break ring.
+				bounds.size.y -= 10.0
+			_expect(viewport.encloses(bounds), "Gallery %s at %s plus jitter and clearance stays on screen" % [spawn["enemy_id"], spawn["position"]])
+			for panel in hud_rects:
+				_expect(not panel.intersects(bounds), "Gallery %s at %s clears HUD %s" % [spawn["enemy_id"], spawn["position"], panel])
+			for previous in spawns:
+				var jitter := float(data["pack_jitter_radius"]) * (int(int(spawn["count"]) > 1) + int(int(previous["count"]) > 1))
+				var position: Vector2 = spawn["position"]
+				_expect(position.distance_to(previous["position"]) >= 100.0 + jitter, "Gallery spawn centres (including extra waves) stay 100px apart beyond pack jitter")
+			spawns.append(spawn)
+
+
+func _test_gallery_director() -> void:
+	var data := EncounterCatalog.get_encounter(&"slinger_gallery")
+	var count := EncounterCatalog.get_total_enemy_count(&"slinger_gallery")
+	var single := _court_layout_with_echoes(1, &"slinger_gallery")
+	var first := _court_layout_with_echoes(2, &"slinger_gallery")
+	var second := _court_layout_with_echoes(2, &"slinger_gallery")
+	_expect(single["ids"].size() == count and single["waves_spawned"] == data["waves"].size(), "one echo uses only base Gallery waves")
+	_expect(
+		first["ids"].size() == count + 1
+		and first["initial_ids"].size() == single["initial_ids"].size() + 1
+		and first["initial_ids"].back() == "slinger"
+		and first["waves_spawned"] == data["waves"].size() + 1,
+		"two echoes add the Gallery's extra opening Slinger"
+	)
+	_expect(
+		is_equal_approx(single["initial_health"][0], float(data["enemy_overrides"][&"slinger"]["max_health"]))
+		and is_equal_approx(first["initial_health"][0], float(data["enemy_overrides"][&"slinger"]["max_health"]) * float(data["large_party"]["enemy_health_multiplier"])),
+		"only two-echo Gallery enemies receive the health multiplier"
+	)
+	for index in first["initial_ids"].size():
+		var enemy_id := StringName(first["initial_ids"][index])
+		var base_enemy := EnemyCatalog.instantiate(enemy_id)
+		_expect(
+			is_equal_approx(float(first["initial_health"][index]), float(data["enemy_overrides"][enemy_id].get("max_health", base_enemy.max_health)) * float(data["large_party"]["enemy_health_multiplier"])),
+			"Gallery health adjustment applies to every opening enemy type: %s" % enemy_id
+		)
+		base_enemy.free()
+	for index in first["ids"].size():
+		var enemy_id := StringName(first["ids"][index])
+		var base := EnemyCatalog.instantiate(enemy_id)
+		var values: Dictionary = data["enemy_overrides"].get(enemy_id, {})
+		var expected_health := float(values.get("max_health", base.max_health))
+		var expected_speed := float(values.get("move_speed", base.move_speed))
+		_expect(
+			is_equal_approx(float(first["stats"][index][1]), expected_health * float(data["large_party"]["enemy_health_multiplier"]))
+			and is_equal_approx(float(first["stats"][index][0]), expected_speed),
+			"overrides and large-party scaling apply to later Gallery waves as well: %s" % enemy_id
+		)
+		base.free()
+	_expect(first == second, "the Gallery director repeats IDs, positions, exported stats and enemy seeds deterministically")
+	var court := _make_court()
+	var director: EncounterDirector = court[2]
+	_make_hero(court[0], Vector2.ZERO)
+	director.encounter_id = &"slinger_gallery"
+	_expect(not director.try_trigger(4, false, [&"vanguard"]), "Gallery waits until the active hero's level 5")
+	_expect(not director.try_trigger(5, true, [&"vanguard"]), "Gallery waits for pending choices")
+	_expect(director.try_trigger(5, false, [&"vanguard", &"arcanist"]), "Gallery arms and triggers through the normal director path")
+	_step_until(director, EncounterDirector.STATE_ACTIVE)
+	_clear_court(director)
+	_expect(
+		director.state == EncounterDirector.STATE_CLEARED
+		and director.last_report["encounter_id"] == "slinger_gallery"
+		and director.last_report["uncovered"].is_empty()
+		and (court[1] as EnemySpawner).target_population == 7,
+		"Gallery clears all timed waves, reports its own ID/coverage and restores arena spawning"
+	)
+	_free_court(court)
+
+
+func _test_enemy_overrides() -> void:
+	var court := _make_court()
+	var director: EncounterDirector = court[2]
+	_make_hero(court[0], Vector2.ZERO)
+	director.start_encounter([&"vanguard"], &"slinger_gallery")
+	_step_until(director, EncounterDirector.STATE_ACTIVE)
+	var data := EncounterCatalog.get_encounter(&"slinger_gallery")
+	for enemy: EnemyActor in director.get_children():
+		var values: Dictionary = data["enemy_overrides"][enemy.enemy_id]
+		if enemy.enemy_id == &"slinger":
+			_expect(enemy.get("shot_damage") == values["shot_damage"], "Gallery Slinger uses its local dart damage")
+		_expect(enemy.health == enemy.max_health, "overrides run before ready initializes live health")
+		_expect(is_equal_approx(enemy.move_speed, float(values["move_speed"])), "Gallery override applies before ready: %s" % enemy.enemy_id)
+		_expect(is_equal_approx(float(enemy.get("flee_distance")), float(values["flee_distance"])), "Gallery uses exported local flee distance")
+		_expect(is_equal_approx(float(enemy.get("keep_distance")), float(values["keep_distance"])), "Gallery uses exported local keep distance")
+	var arena_slinger := EnemyCatalog.instantiate(&"slinger")
+	var arena_hexcaller := EnemyCatalog.instantiate(&"hexcaller")
+	_expect(arena_slinger.move_speed == 100.0 and arena_hexcaller.move_speed == 85.0
+		and arena_slinger.get("shot_damage") == 14.0, "Gallery overrides never mutate EnemyCatalog/open-arena defaults")
+	_expect(arena_slinger.get("flee_distance") == 260.0 and arena_hexcaller.get("keep_distance") == 440.0, "open-arena kite distances retain their defaults")
+	var rng_state := director.random.state
+	director._apply_enemy_overrides(arena_slinger, {
+		"move_speed": 275, "max_health": 90.0, "flee_distance": 310.0,
+		"enemy_id": &"brute", "experience_reward": 999, "health": 999.0,
+		"contact_damage": 999.0, "spawn_grace": 999.0,
+		"simulation_seed": 999, "stable_spawn_order": 999, "unknown": 1.0,
+	})
+	_expect(
+		arena_slinger.move_speed == 275.0 and arena_slinger.max_health == 90.0
+		and arena_slinger.get("flee_distance") == 310.0
+		and arena_slinger.enemy_id == &"slinger" and arena_slinger.experience_reward == 50
+		and arena_slinger.contact_damage == 0.0 and arena_slinger.spawn_grace == 0.0
+		and arena_slinger.health != 999.0 and arena_slinger.simulation_seed == 1
+		and arena_slinger.stable_spawn_order == 0 and director.random.state == rng_state,
+		"only allow-listed exported numeric properties change; identity/runtime/rewards/RNG are protected"
+	)
+	for invalid: Variant in ["300", true, -1.0, INF, NAN, Vector2.ONE, null]:
+		director._apply_enemy_overrides(arena_slinger, {"move_speed": invalid})
+		_expect(arena_slinger.move_speed == 275.0, "invalid override values are ignored deterministically: %s" % [invalid])
+	director._apply_enemy_overrides(arena_slinger, {"max_health": 0.0})
+	_expect(arena_slinger.max_health == 90.0, "max_health override must be positive")
+	var skitter := EnemyCatalog.instantiate(&"skitter")
+	director._apply_enemy_overrides(skitter, {"flee_distance": 310.0})
+	_expect(skitter.get("flee_distance") == null, "allow-listed properties absent from the enemy are ignored")
+	skitter.free()
+	arena_slinger.free()
+	arena_hexcaller.free()
+	director.reset_for_new_run()
+	director.start_encounter([&"vanguard"], &"bell_court")
+	_step_until(director, EncounterDirector.STATE_ACTIVE)
+	for enemy: EnemyActor in director.get_children():
+		var base := EnemyCatalog.instantiate(enemy.enemy_id)
+		_expect(enemy.move_speed == base.move_speed and enemy.max_health == base.max_health, "Bell Court retains scene stats after Gallery reset")
+		base.free()
+	var court_slinger := director._spawn_enemy(&"slinger", Vector2.ZERO, 1.0)
+	_expect(court_slinger.move_speed == 100.0 and court_slinger.get("flee_distance") == 260.0, "an enemy spawned by the Court director gets no Gallery overrides")
+	_free_court(court)
+
+
+func _test_gallery_wave_occupancy() -> void:
+	var court := _make_court()
+	var director: EncounterDirector = court[2]
+	_make_hero(court[0], Vector2.ZERO)
+	director.start_encounter([&"vanguard"], &"slinger_gallery")
+	_step_until(director, EncounterDirector.STATE_ACTIVE)
+	_step(director, 1800)
+	_expect(director.waves_spawned == 1 and director.get_alive_enemy_count() == 5, "overdue Gallery waves wait while more than two enemies survive")
+	for index in 3:
+		(director.get_child(index) as EnemyActor).is_defeated = true
+	_step(director, 1)
+	_expect(director.waves_spawned == 2 and director.get_alive_enemy_count() == 6, "four Skitters join at most two survivors")
+	_step(director, 1)
+	_expect(director.waves_spawned == 2, "multiple overdue groups cannot bypass the occupancy gate in one tick")
+	for index in range(3, 7):
+		(director.get_child(index) as EnemyActor).is_defeated = true
+	_step(director, 1)
+	_expect(director.waves_spawned == 3 and director.get_alive_enemy_count() == 6, "final ranged group also respects the six-enemy cap")
+	for enemy: EnemyActor in director.get_children():
+		enemy.is_defeated = true
+	_step(director, 1)
+	_expect(director.state == EncounterDirector.STATE_CLEARED, "Gallery clears after all gated groups die")
+	_free_court(court)
+
+
+func _test_gallery_scenarios() -> void:
+	var count := 0
+	for file_name in DirAccess.get_files_at("res://tests/scenarios"):
+		if not file_name.ends_with("_5_gallery.tscn"):
+			continue
+		var scenario := (load("res://tests/scenarios/" + file_name) as PackedScene).instantiate()
+		var jobs: Array = scenario.echo_jobs.duplicate()
+		if not scenario.echo_job.is_empty():
+			jobs.append(scenario.echo_job)
+		var expected_name := String(scenario.player_job)
+		for job: StringName in jobs:
+			expected_name += "_" + String(job)
+		if jobs.is_empty():
+			expected_name += "_solo"
+		_expect(
+			scenario.encounter_id == &"slinger_gallery" and scenario.level == 5
+			and (jobs.size() != 2 or scenario.party_slots == 2)
+			and file_name == expected_name + "_5_gallery.tscn",
+			"Gallery scenario ID, level, party capacity and jobs match its name: " + file_name
+		)
+		scenario.free()
+		count += 1
+	_expect(count == 9, "all nine Gallery matrix scenarios exist")
+
+
+func _test_gallery_main_flow() -> void:
+	var main := MainScene.instantiate()
+	main.save_path = ""
+	root.add_child(main)
+	main.document.next_hero_number = 2
+	main.run_number = 2
+	main._apply_trial_rotation()
+	main.apply_scenario(&"vanguard", &"vanguard", 3, &"")
+	main.progression = _level_three_progression()
+	main._show_next_choice_if_needed()
+	main._update_trial_hud()
+	_expect(
+		main.trial_title.text == "TRIAL · Slinger Gallery · Lv 5"
+		and main._trial_chip_labels[2].text == "✗ RANGE\nMissing"
+		and main.choice_two_button.text.ends_with("Fills Trial need: RANGE ★")
+		and not main.choice_one_button.text.contains("★")
+		and not main.choice_three_button.text.contains("★"),
+		"hero 2's panel, coverage and level-3 annotations use Gallery needs"
+	)
+	main.apply_scenario(&"vanguard", &"arcanist", 4, &"")
+	main.encounter_director.reset_for_new_run()
+	main._update_encounter(0.0)
+	_expect(main.encounter_director.state == EncounterDirector.STATE_IDLE, "Main waits for active hero level 5 in Gallery")
+	main.progression = main._build_scenario_progression(&"vanguard", 5)
+	main._update_encounter(0.0)
+	_expect(
+		main.encounter_director.state == EncounterDirector.STATE_WARNING
+		and main.encounter_director.encounter_id == &"slinger_gallery"
+		and main.trial_banner_title.text == "THE SLINGER GALLERY"
+		and main.trial_banner_needs.text == "Needs: Interrupt · Area · Range",
+		"Main's re-armed Gallery triggers at the active hero's level and shows its banner"
+	)
+	main._start_next_run()
+	_expect(
+		main.run_number == 3
+		and main.encounter_director.encounter_id == &"bell_court"
+		and main.encounter_director.last_report["encounter_id"] == "slinger_gallery"
+		and main.trial_report_title.text.begins_with("SLINGER GALLERY — FAILED"),
+		"Gallery failure keeps the fallen Trial's report while rotating the next hero to Bell Court"
+	)
+	main.resolution_screen.hide()
+	main.document.next_hero_number = 2
+	_expect(
+		main.apply_scenario(&"vanguard", &"", 5, &"bell_court")
+		and main.encounter_director.encounter_id == &"bell_court",
+		"an explicit Bell Court scenario overrides even-hero rotation"
+	)
+	main.document.next_hero_number = 1
+	_expect(
+		main.apply_scenario(&"vanguard", &"", 5, &"slinger_gallery")
+		and main.encounter_director.encounter_id == &"slinger_gallery",
+		"an explicit Gallery scenario overrides odd-hero rotation"
+	)
+	main.free()
+	paused = false
 
 
 func _test_trigger_conditions() -> void:
@@ -253,6 +568,83 @@ func _test_wave_timeline() -> void:
 		"t=%.0f s spawns skitter pack B (4) around the catalog position" % pack_b_time
 	)
 	_free_court(court)
+
+
+func _test_large_party_adjustment() -> void:
+	var single := _court_layout_with_echoes(1)
+	var first := _court_layout_with_echoes(2)
+	var second := _court_layout_with_echoes(2)
+	_expect(
+		single["initial_ids"] == ["brute", "brute", "hexcaller"]
+		and single["ids"].size() == 11
+		and single["waves_spawned"] == 3
+		and is_equal_approx(single["initial_health"][0], 600.0),
+		"one echo keeps the original three-wave, eleven-enemy Court"
+	)
+	_expect(
+		first["initial_ids"] == ["brute", "brute", "hexcaller", "hexcaller", "hexcaller"]
+		and first["ids"].size() == 14
+		and first["waves_spawned"] == 5
+		and first["positions"][3] == Vector2(-330.0, 250.0)
+		and first["positions"][4] == Vector2(520.0, -40.0)
+		and first["positions"][9] == Vector2(300.0, 250.0),
+		"two echoes add two catalog Hexcallers at t=0 and a Brute at t=8"
+	)
+	_expect(
+		first["positions"] == second["positions"]
+		and first["seeds"] == second["seeds"],
+		"large-party positions, pack jitter, and enemy seeds are deterministic"
+	)
+	var health_multiplier := float(
+		EncounterCatalog.get_encounter(&"bell_court")["large_party"]["enemy_health_multiplier"]
+	)
+	_expect(
+		is_equal_approx(first["initial_health"][0], 600.0 * health_multiplier)
+		and is_equal_approx(first["initial_health"][2], 140.0 * health_multiplier),
+		"the large-party health multiplier applies to every Court enemy"
+	)
+
+
+func _court_layout_with_echoes(
+	echo_count: int, encounter_id: StringName = &"bell_court"
+) -> Dictionary:
+	var court := _make_court()
+	var director: EncounterDirector = court[2]
+	var hero := _make_hero(court[0], Vector2.ZERO)
+	for index in echo_count:
+		_make_echo(court[0], hero, Vector2(40.0 + index * 50.0, 0.0))
+	director.start_encounter([&"vanguard", &"mender"], encounter_id)
+	_step_until(director, EncounterDirector.STATE_ACTIVE)
+	var initial_ids: Array[String] = []
+	var initial_health: Array[float] = []
+	for enemy: EnemyActor in director.get_children():
+		initial_ids.append(String(enemy.enemy_id))
+		initial_health.append(enemy.max_health)
+	# Retain defeated nodes for layout inspection while releasing gated waves.
+	for _frame in 1440:
+		for enemy: EnemyActor in director.get_children():
+			enemy.is_defeated = true
+		director._physics_process(PHYSICS_STEP)
+	var ids: Array[String] = []
+	var positions: Array[Vector2] = []
+	var seeds: Array[int] = []
+	var stats: Array[Array] = []
+	for enemy: EnemyActor in director.get_children():
+		stats.append([enemy.move_speed, enemy.max_health, enemy.get("flee_distance"), enemy.get("keep_distance")])
+		ids.append(String(enemy.enemy_id))
+		positions.append(enemy.position)
+		seeds.append(enemy.simulation_seed)
+	var spawned := director.waves_spawned
+	_free_court(court)
+	return {
+		"stats": stats,
+		"initial_ids": initial_ids,
+		"initial_health": initial_health,
+		"ids": ids,
+		"positions": positions,
+		"seeds": seeds,
+		"waves_spawned": spawned,
+	}
 
 
 func _test_clear_resumes_spawner() -> void:
@@ -647,7 +1039,7 @@ func _test_scenario_hook_and_main_trigger() -> void:
 	_expect(
 		director.state == EncounterDirector.STATE_ACTIVE
 		and not main.trial_banner.visible
-		and main.trial_status.text.begins_with("Court in progress")
+		and main.trial_status.text.begins_with("Trial in progress")
 		and director.get_child_count() == 3,
 		"the banner hides once the court is ACTIVE"
 	)

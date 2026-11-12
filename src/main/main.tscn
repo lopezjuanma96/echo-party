@@ -1,10 +1,11 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://src/main/arena.gd" id="2_arena"]
 [ext_resource type="Script" path="res://src/player/player.gd" id="3_player"]
 [ext_resource type="Script" path="res://src/enemy/enemy_spawner.gd" id="4_spawner"]
 [ext_resource type="Script" path="res://src/encounter/encounter_director.gd" id="5_director"]
+[ext_resource type="PackedScene" path="res://src/main/resolution_screen.tscn" id="6_resolution"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_top"]
 size = Vector2(1824, 24)
@@ -140,7 +141,7 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
 theme_override_font_sizes/font_size = 16
-text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\nE  |  Job ability\n1 / 2 or Mouse Wheel  |  Select available weapon\nRight Click  |  Focus enemy\nR  |  Regroup echo\nQ  |  Toggle echo hold / follow"
+text = "WASD / Arrow Keys  |  Move\nSpace  |  Dodge roll\nLeft Click  |  Basic attack\nE  |  Job ability\n1 / 2  |  Select available weapon\nMouse Wheel  |  Address All / Echo 1 / Echo 2\nRight Click  |  Focus enemy\nR / Q  |  Regroup / toggle hold"
 
 [node name="Health" type="PanelContainer" parent="HUD"]
 anchors_preset = 1
@@ -244,9 +245,9 @@ horizontal_alignment = 1
 
 [node name="Progression" type="PanelContainer" parent="HUD"]
 offset_left = 20.0
-offset_top = 376.0
+offset_top = 452.0
 offset_right = 212.0
-offset_bottom = 474.0
+offset_bottom = 550.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/Progression"]
@@ -278,12 +279,12 @@ horizontal_alignment = 1
 offset_left = 20.0
 offset_top = 259.0
 offset_right = 423.0
-offset_bottom = 364.0
+offset_bottom = 440.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Content" type="VBoxContainer" parent="HUD/RunStatus"]
 layout_mode = 2
-theme_override_constants/separation = 2
+theme_override_constants/separation = 1
 
 [node name="RunValue" type="Label" parent="HUD/RunStatus/Content"]
 layout_mode = 2
@@ -296,7 +297,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
 theme_override_font_sizes/font_size = 13
-text = "Echo: None"
+text = "Echo 1: empty slot"
 horizontal_alignment = 1
 
 [node name="EchoCommandValue" type="Label" parent="HUD/RunStatus/Content"]
@@ -314,6 +315,38 @@ text = "Intent: —"
 horizontal_alignment = 1
 
 [node name="EchoCooldownsValue" type="Label" parent="HUD/RunStatus/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Cooldowns: —"
+horizontal_alignment = 1
+
+[node name="Echo2Value" type="Label" parent="HUD/RunStatus/Content"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Echo 2: empty slot"
+horizontal_alignment = 1
+
+[node name="Echo2CommandValue" type="Label" parent="HUD/RunStatus/Content"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Command: —"
+horizontal_alignment = 1
+
+[node name="Echo2IntentValue" type="Label" parent="HUD/RunStatus/Content"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 13
+text = "Intent: —"
+horizontal_alignment = 1
+
+[node name="Echo2CooldownsValue" type="Label" parent="HUD/RunStatus/Content"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
 theme_override_font_sizes/font_size = 13
@@ -521,6 +554,38 @@ layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 17
 text = "[3] MENDER\nMace and Sling — Mend a wounded ally"
+
+[node name="RunNotice" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -240.0
+offset_top = -206.0
+offset_right = 240.0
+offset_bottom = -160.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_banner")
+
+[node name="Margin" type="MarginContainer" parent="HUD/RunNotice"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 6
+
+[node name="Text" type="Label" parent="HUD/RunNotice/Margin"]
+custom_minimum_size = Vector2(456, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.87, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ResolutionScreen" parent="HUD" instance=ExtResource("6_resolution")]
 
 [connection signal="defeated" from="Player" to="." method="_on_player_defeated"]
 [connection signal="health_changed" from="Player" to="." method="_on_player_health_changed"]

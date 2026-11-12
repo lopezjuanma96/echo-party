@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+[node name="VanguardMenderArcanist5Gallery" type="Node"]
+script = ExtResource("1_launcher")
+player_job = &"vanguard"
+echo_jobs = Array[StringName](["mender", "arcanist"])
+level = 5
+party_slots = 2
+encounter_id = &"slinger_gallery"

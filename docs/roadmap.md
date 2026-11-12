@@ -52,6 +52,21 @@ balance still need human playtest evidence.
 Exit condition: roster decisions create meaningful tradeoffs across several
 runs without an obvious dominant strategy.
 
+Status: all six systems above are implemented. The runtime supports two
+slot-addressed echoes, roster resolution and memorial swapping, and player-
+authored history extension. Persistent saves carry the roster, hero counter,
+unlocks, clear counts, and pending resolutions. The first Trial clear unlocks
+party slot 2, the third total clear unlocks memorial slot 2, and each clear
+awards one run-only Echo Anchor (maximum one held). Bell Court and Slinger
+Gallery now alternate by persisted hero number, with per-Trial clear counts and
+next-Trial roster advice. The four-mode tuning matrix is recorded in the M3
+plan. The Gallery caps its groups at six enemies, and its kiters use stat
+overrides local to the Gallery. In the bot matrix every pure-melee party fails
+it and every party with an Arcanist clears it; parties with a Mender also clear,
+through the Sling. Human playtests must still show that roster swapping,
+readability, and the lack of a dominant strategy hold up, so M3's exit
+condition is not yet established.
+
 ## M4: Dungeon Slice
 
 - Add a small sequence of authored or assembled rooms.

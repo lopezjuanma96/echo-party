@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/scenarios/scenario_launcher.gd" id="1_launcher"]
+
+[node name="PersistReloadSlot" type="Node"]
+script = ExtResource("1_launcher")
+save_slot = "pw1"
+reset_save = false
